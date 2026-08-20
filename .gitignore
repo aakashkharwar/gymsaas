@@ -33,6 +33,12 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# one-off patch scripts at root
+/*.js
+
+# local data
+/.data
+
 # vercel
 .vercel
 

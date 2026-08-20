@@ -1,69 +1,62 @@
-import Image from "next/image";
+import Link from 'next/link';
+import ThemeToggle from '../components/ThemeToggle';
+import { Button } from '@/components/ui/button';
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+      <header className="px-6 py-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md sticky top-0 z-50">
+        <div className="text-2xl font-bold tracking-tighter text-slate-900 dark:text-white">GymOS</div>
+        <nav className="flex gap-3 sm:gap-4 items-center">
+          <Link href="/login" className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors hidden sm:block">
+            Log in
+          </Link>
+          <Link href="/signup">
+            <Button className="rounded-lg shadow-sm">
+              Start Free Trial
+            </Button>
+          </Link>
+          <div className="ml-2 sm:ml-4">
+            <ThemeToggle />
+          </div>
+        </nav>
+      </header>
+
+      <main className="flex-1 flex flex-col items-center text-center px-4 sm:px-6 py-20 sm:py-32">
+        <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-6xl max-w-3xl">
+          Run your entire gym from one simple platform
+        </h1>
+        <p className="mt-6 text-lg leading-8 text-slate-600 dark:text-slate-400 max-w-2xl">
+          GymOS gives independent gym owners a branded landing page, automated fee reminders via WhatsApp, attendance tracking, and profit visibility — all without the enterprise price tag.
+        </p>
+        
+        <div className="mt-10 flex items-center justify-center">
+          <Link href="/signup">
+            <Button className="w-full sm:w-auto text-base py-6 px-8 rounded-xl shadow-lg border-none bg-slate-900 dark:bg-indigo-600 text-white hover:bg-slate-800 dark:hover:bg-indigo-500 transition-all">
+              Start your 14-day free trial
+            </Button>
+          </Link>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="mt-24 grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 max-w-5xl mx-auto w-full text-left">
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white">Automated Reminders</h3>
+            <p className="mt-3 text-slate-600 dark:text-slate-400 leading-relaxed">Send WhatsApp fee reminders to members automatically, branded with your gym's name.</p>
+          </div>
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white">Your Own Website</h3>
+            <p className="mt-3 text-slate-600 dark:text-slate-400 leading-relaxed">Get a beautiful, SEO-optimized landing page for your gym to capture new leads instantly.</p>
+          </div>
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white">Track Profits</h3>
+            <p className="mt-3 text-slate-600 dark:text-slate-400 leading-relaxed">Log expenses and track your monthly P&L in real-time. Know exactly how much you're making.</p>
+          </div>
         </div>
       </main>
+      
+      <footer className="py-8 text-center text-slate-500 dark:text-slate-500 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
+        <p className="text-sm">&copy; 2026 GymOS. All rights reserved.</p>
+      </footer>
     </div>
   );
 }
