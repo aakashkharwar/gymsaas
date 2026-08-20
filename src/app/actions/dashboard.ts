@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server';
+import { unstable_rethrow } from 'next/navigation';
 
 export async function getGymName() {
   try {
@@ -49,6 +50,7 @@ export async function getGymName() {
     console.error("No org found. orgsErr:", orgsErr);
     return 'GYM NAME';
   } catch (err) {
+    unstable_rethrow(err);
     console.error("Error in getGymName:", err);
     return 'GYM NAME';
   }

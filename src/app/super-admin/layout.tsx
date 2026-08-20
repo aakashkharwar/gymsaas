@@ -1,8 +1,9 @@
 import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { ShieldCheck, LogOut } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
+
+export const dynamic = 'force-dynamic';
 
 export default async function SuperAdminLayout({
   children,

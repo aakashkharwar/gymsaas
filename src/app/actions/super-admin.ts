@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { unstable_rethrow } from 'next/navigation';
 
 // Helper to ensure only super admins can run these actions
 async function verifySuperAdmin() {
@@ -64,6 +65,7 @@ export async function getSuperAdminStats() {
       mrr
     };
   } catch (err) {
+    unstable_rethrow(err);
     console.error(err);
     return { totalGyms: 0, activeTrials: 0, suspendedAccounts: 0, mrr: 0 };
   }
@@ -85,6 +87,7 @@ export async function getOrganizations() {
 
     return organizations;
   } catch (err) {
+    unstable_rethrow(err);
     console.error(err);
     return [];
   }
@@ -106,6 +109,7 @@ export async function updateOrganizationStatus(organizationId: string, newStatus
     revalidatePath('/super-admin');
     return { success: true };
   } catch (err: any) {
+    unstable_rethrow(err);
     return { error: err.message };
   }
 }
