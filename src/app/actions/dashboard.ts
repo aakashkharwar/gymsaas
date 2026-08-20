@@ -57,7 +57,7 @@ export async function getGymName() {
 export async function getDashboardStats() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { members: 0, overdue: 0, profit: 0, recentActivity: [] };
+  if (!user) return { members: 0, overdue: 0, profit: 0, totalRevenue: 0, totalExpenses: 0, newMembers: 0, recentActivity: [] };
 
   // Fetch all members count
   const { count: memberCount } = await supabase

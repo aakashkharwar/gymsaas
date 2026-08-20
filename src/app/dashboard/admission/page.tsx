@@ -100,11 +100,6 @@ export default function AdmissionPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="px-5 py-6 sm:p-8 space-y-8" noValidate>
-          {successMsg && (
-            <div className="p-4 bg-green-50 text-green-700 rounded-md border border-green-200 font-medium">
-              {successMsg}
-            </div>
-          )}
           {errors.form && (
             <div className="p-4 bg-red-50 text-red-700 rounded-md border border-red-200 font-medium">
               {errors.form}

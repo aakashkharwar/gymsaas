@@ -23,6 +23,8 @@ export type Invoice = {
   amount: number;
   due_date: string;
   status: 'paid' | 'pending' | 'partial' | 'overdue';
+  created_at?: string;
+  plan_name?: string;
 };
 
 export type PendingPayment = {

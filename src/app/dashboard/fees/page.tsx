@@ -98,17 +98,21 @@ export default async function FeesDashboard() {
             </div>
           ) : (
             <div className="space-y-4">
-              {recentPayments.map(payment => (
+              {recentPayments.map(payment => {
+                const memberRel = payment.members as { name?: string } | { name?: string }[] | null;
+                const memberName = (Array.isArray(memberRel) ? memberRel[0]?.name : memberRel?.name) || 'Unknown Member';
+                return (
                 <div key={payment.id} className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4 last:border-0 last:pb-0">
                   <div>
-                    <p className="font-semibold text-slate-900 dark:text-white">{payment.members?.name || 'Unknown Member'}</p>
+                    <p className="font-semibold text-slate-900 dark:text-white">{memberName}</p>
                     <p className="text-sm text-slate-500 dark:text-slate-400">{new Date(payment.paid_at).toLocaleDateString()} &middot; {payment.payment_mode}</p>
                   </div>
                   <div className="font-bold text-emerald-600 dark:text-emerald-400">
                     +₹{payment.amount.toLocaleString()}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

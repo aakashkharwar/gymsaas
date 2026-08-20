@@ -10,6 +10,8 @@ import CustomDropdown from '@/components/CustomDropdown';
 type Invoice = {
   id: string;
   member_id: string;
+  fee_plan_id?: string;
+  plan_name?: string;
   amount: number;
   due_date: string;
   status: 'pending' | 'partial' | 'paid' | 'overdue';
@@ -18,6 +20,7 @@ type Invoice = {
 export default function CollectionsPage() {
   const [members, setMembers] = useState<{ id: string; name: string; phone: string }[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [feePlans, setFeePlans] = useState<{ id: string; name: string }[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const [selectedInvoiceId, setSelectedInvoiceId] = useState('');
   
@@ -38,9 +41,11 @@ export default function CollectionsPage() {
       const m = await import('@/app/actions/fees');
       const membersData = await (await import('@/app/actions/members')).getMembers();
       const invoicesData = await m.getInvoices();
+      const plansData = await m.getFeePlans();
       if (mounted) {
         setMembers(membersData);
         setInvoices(invoicesData);
+        setFeePlans(plansData);
       }
     };
     load();
@@ -154,10 +159,13 @@ export default function CollectionsPage() {
               }}
               options={[
                 { value: '', label: 'No invoice (Direct payment)' },
-                ...invoices.filter(i => i.member_id === selectedMemberId && i.status === 'pending').map(i => ({
-                  value: i.id,
-                  label: `${i.plan_name} - ₹${i.amount}`
-                }))
+                ...invoices.filter(i => i.member_id === selectedMemberId && i.status === 'pending').map(i => {
+                  const plan = feePlans.find(p => p.id === i.fee_plan_id);
+                  return {
+                    value: i.id,
+                    label: `${i.plan_name || plan?.name || 'Invoice'} - ₹${i.amount}`
+                  };
+                })
               ]}
               placeholder={selectedMemberId ? "Select an unpaid invoice..." : "Select a member first..."}
             />

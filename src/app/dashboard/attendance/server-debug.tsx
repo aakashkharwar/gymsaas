@@ -1,6 +1,6 @@
 'use client';
 
-
+import { Button } from '@/components/ui/button';
 import { useCallback, useEffect, useState } from 'react';
 
 type Stored = Record<string, unknown>;

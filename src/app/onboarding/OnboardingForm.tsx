@@ -22,7 +22,7 @@ export default function OnboardingForm({ initialSlug }: { initialSlug: string })
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const router = useRouter();
 
-  const validateForm = (e?: React.FormEvent<HTMLFormElement> | FormData) => {
+  const validateForm = (e: React.FormEvent<HTMLFormElement> | FormData) => {
     const formData = e instanceof FormData ? e : new FormData(e.currentTarget);
     const data = Object.fromEntries(formData.entries());
     
