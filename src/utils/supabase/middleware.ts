@@ -51,13 +51,6 @@ export async function updateSession(request: NextRequest) {
       }
     }
 
-    if (!isServerAction && (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup')) {
-      if (user) {
-        url.pathname = '/dashboard'
-        return NextResponse.redirect(url)
-      }
-    }
-
     return supabaseResponse
   } catch (error) {
     console.error('updateSession error:', error)

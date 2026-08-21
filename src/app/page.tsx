@@ -5,18 +5,19 @@ import { Button } from '@/components/ui/button';
 export default function Home() {
   return (
     <div className="flex flex-col min-h-screen bg-transparent transition-colors duration-300">
-      <header className="px-6 py-4 flex items-center justify-between border-b border-slate-200/70 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md sticky top-0 z-50">
-        <div className="text-2xl font-bold tracking-tighter text-slate-900 dark:text-white">GymOS</div>
-        <nav className="flex gap-3 sm:gap-4 items-center">
-          <Link href="/login" className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors hidden sm:block">
+      <header className="px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2 border-b border-slate-200/70 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md sticky top-0 z-50">
+        <div className="text-xl sm:text-2xl font-bold tracking-tighter text-slate-900 dark:text-white shrink-0">GymOS</div>
+        <nav className="flex gap-2 sm:gap-4 items-center min-w-0">
+          <Link href="/login" className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors shrink-0 px-1">
             Log in
           </Link>
-          <Link href="/signup">
-            <Button className="rounded-lg shadow-sm">
-              Start Free Trial
+          <Link href="/signup" className="shrink-0">
+            <Button className="rounded-lg shadow-sm h-9 px-3 sm:h-10 sm:px-5 text-xs sm:text-sm">
+              <span className="sm:hidden">Free trial</span>
+              <span className="hidden sm:inline">Start Free Trial</span>
             </Button>
           </Link>
-          <div className="ml-2 sm:ml-4">
+          <div className="shrink-0">
             <ThemeToggle />
           </div>
         </nav>
@@ -27,7 +28,7 @@ export default function Home() {
           Run your entire gym from one simple platform
         </h1>
         <p className="reveal reveal-delay-1 mt-6 text-lg leading-8 text-slate-600 dark:text-slate-400 max-w-2xl">
-          GymOS gives independent gym owners a branded landing page, automated fee reminders via WhatsApp, attendance tracking, and profit visibility — all without the enterprise price tag.
+          GymOS gives independent gym owners a branded landing page, automated fee reminders via WhatsApp, attendance tracking, and profit visibility — plus a free Hindi Owner Copilot that answers “Aaj kitna collection?” without an AI bill.
         </p>
         
         <div className="reveal reveal-delay-2 mt-10 flex items-center justify-center">
@@ -51,6 +52,13 @@ export default function Home() {
             <h3 className="text-xl font-bold text-slate-900 dark:text-white">Track Profits</h3>
             <p className="mt-3 text-slate-600 dark:text-slate-400 leading-relaxed">Log expenses and track your monthly P&L in real-time. Know exactly how much you're making.</p>
           </div>
+        </div>
+
+        <div className="reveal mt-8 max-w-5xl mx-auto w-full text-left bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <h3 className="text-xl font-bold text-slate-900 dark:text-white">Owner Copilot — always free</h3>
+          <p className="mt-3 text-slate-600 dark:text-slate-400 leading-relaxed">
+            Ask in Hindi or English from the dashboard: who came today, who is overdue, this month’s profit, or “Ravi ka fee pending hai?” No ChatGPT, no WhatsApp API fee — it reads your gym’s own data.
+          </p>
         </div>
       </main>
       

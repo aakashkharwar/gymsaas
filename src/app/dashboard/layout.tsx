@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation';
 import { motion } from 'motion/react';
 import { Home, Users, CheckSquare, CreditCard, Receipt, Settings, Menu, X, Clipboard } from 'lucide-react';
 import ThemeToggle from '../../components/ThemeToggle';
+import OwnerCopilot from '@/components/OwnerCopilot';
 
 export default function DashboardLayout({
   children,
@@ -172,6 +173,7 @@ export default function DashboardLayout({
           {children}
         </main>
       </div>
+      <OwnerCopilot />
     </div>
   );
 }

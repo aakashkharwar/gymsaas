@@ -21,7 +21,7 @@ export default function ThemeToggle() {
 
   return (
     <div className="inline-flex items-center">
-      <div className="flex items-center gap-1 rounded-full bg-slate-100/80 px-1 py-1 shadow-inner backdrop-blur-sm dark:bg-slate-800/80">
+    <div className="flex items-center gap-0.5 sm:gap-1 rounded-full bg-slate-100/80 px-0.5 sm:px-1 py-1 shadow-inner backdrop-blur-sm dark:bg-slate-800/80">
         {renderButton("light", "Light", () => setTheme("light"), <Sun className="h-4 w-4 text-amber-500" />, theme === "light")}
         {renderButton("system", "System", () => setTheme("system"), <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">A</span>, theme === "system")}
         {renderButton("dark", "Dark", () => setTheme("dark"), <Moon className="h-4 w-4 text-sky-400" />, theme === "dark")}
