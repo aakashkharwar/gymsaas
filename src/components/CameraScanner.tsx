@@ -127,6 +127,7 @@ export default function CameraScanner({ onDetected, onError, facingMode = 'envir
 
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           setSupported(false);
+          if (onError) onError(new Error('Camera is not available. Open this page on HTTPS and allow camera access.'));
           return;
         }
 
@@ -189,7 +190,14 @@ export default function CameraScanner({ onDetected, onError, facingMode = 'envir
 
   return (
     <div className="relative">
-      <video ref={videoRef} className="w-full h-auto rounded-2xl" style={{ maxHeight: 420 }} playsInline muted />
+      <video
+        ref={videoRef}
+        className="w-full h-auto rounded-2xl bg-slate-900"
+        style={{ maxHeight: 420 }}
+        playsInline
+        muted
+        autoPlay
+      />
       <canvas ref={canvasRef} style={{ display: 'none' }} />
       {!scanning && <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">Starting camera…</div>}
     </div>

@@ -31,8 +31,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div id="site-root" className="min-h-screen w-full relative">
             {children}
           </div>
+          <Toaster />
         </ThemeProvider>
-        <Toaster />
       </body>
     </html>
   );

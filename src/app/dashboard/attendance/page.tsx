@@ -1,5 +1,6 @@
 'use client';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import QRCode from 'qrcode';
@@ -206,7 +207,14 @@ export default function AttendancePage() {
         if (navigator.onLine) {
           try {
             const att = await import('@/app/actions/attendance');
-            const serverData = await att.getTodayAttendance();
+            const membersMod = await import('@/app/actions/members');
+            const [serverData, memberList] = await Promise.all([
+              att.getTodayAttendance(),
+              membersMod.getMembers(),
+            ]);
+            if (Array.isArray(memberList)) {
+              await m.saveMembers(memberList.map((mem: any) => ({ ...mem, qrCode: mem.phone, username: mem.phone })));
+            }
             
             // Map server data to AttendanceRecord format
             const mapped = serverData.map((s: any) => {
@@ -519,49 +527,53 @@ export default function AttendancePage() {
       status: 'present',
       date: today,
     });
-    setMode('dashboard');
+    toast.success('Attendance marked successfully');
   };
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">Attendance</h1>
-          <p className="mt-2 text-lg text-slate-500 dark:text-slate-400">Offline-first member check-ins and daily attendance overview.</p>
+          <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">Attendance</h1>
+          <p className="mt-2 text-sm sm:text-lg text-slate-500 dark:text-slate-400">Offline-first member check-ins and daily attendance overview.</p>
         </div>
         {scanToast && (
           <div className="fixed right-6 top-6 z-50 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-lg">{scanToast.message}</div>
         )}
 
-        <div className="flex items-center gap-3">
-          {mode === 'dashboard' ? (
-            <Button variant="outline"
+        <div className="flex flex-wrap items-center gap-3">
+          {mode === 'dashboard' && (
+            <>
+            <Button
               type="button"
               onClick={() => {
                 setMode('scanner');
                 startCamera(facingMode);
               }}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 dark:bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 dark:hover:bg-indigo-500 cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold"
             >
               <QrCode className="h-4 w-4" />
               Scan QR Code
             </Button>
-          ) : (
+            <Link href="/dashboard/attendance/generate" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 px-4 py-2 text-sm font-semibold text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+              Generate QR
+            </Link>
+            </>
+          )}
+          {mode === 'scanner' && (
             <Button
               type="button"
+              variant="outline"
               onClick={() => {
                 setMode('dashboard');
                 stopCamera();
               }}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 shadow-sm transition hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold"
             >
               <ArrowLeft className="h-4 w-4" />
-              Back to Dashboard
+              Close scanner
             </Button>
           )}
-          <Link href="/dashboard/attendance/generate" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-600 px-4 py-2 text-sm font-semibold text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer">
-            Generate QR
-          </Link>
         </div>
       </div>
 
@@ -756,16 +768,10 @@ export default function AttendancePage() {
       )}
 
       {mode === 'form' && (
-        <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-8 shadow-sm transition-colors">
-          <div className="mb-8 flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Member attendance</h2>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">QR code: {formData.qrCode}</p>
-            </div>
-            <Button type="button" onClick={() => setMode('scanner')} className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
-              <ArrowLeft className="h-4 w-4" />
-              Back to scanner
-            </Button>
+        <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-8 shadow-sm transition-colors overflow-hidden">
+          <div className="mb-6">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Member attendance</h2>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 break-all">QR code: {formData.qrCode}</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6" noValidate>
@@ -881,11 +887,11 @@ export default function AttendancePage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-4 border-t border-slate-100 dark:border-slate-800 pt-6 mt-8">
-              <Button type="button" onClick={() => setMode('scanner')} className="rounded-xl border border-slate-200 dark:border-slate-700 px-6 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800 pt-6 mt-8">
+              <Button type="button" variant="outline" onClick={() => { setMode('scanner'); startCamera(facingMode); }} className="w-full sm:w-auto rounded-xl px-6 py-2.5 text-sm font-semibold">
                 Cancel
               </Button>
-              <Button type="submit" className="transition-colors cursor-pointer">
+              <Button type="submit" className="w-full sm:w-auto rounded-xl px-6 py-2.5">
                 Submit attendance
               </Button>
             </div>

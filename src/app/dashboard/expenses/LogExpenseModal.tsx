@@ -93,9 +93,11 @@ export default function LogExpenseModal() {
                 />
               </div>
 
-              <div className="flex justify-end gap-4 pt-4">
-                <Button variant="outline" type="button" onClick={() => setIsOpen(false)} className="rounded-xl border border-slate-200 dark:border-slate-700 px-6 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</Button>
-                <Button type="submit" disabled={isSubmitting} className="disabled:opacity-50">
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
+                <Button variant="outline" type="button" onClick={() => setIsOpen(false)} className="w-full sm:w-auto">
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
                   {isSubmitting ? 'Saving...' : 'Save Expense'}
                 </Button>
               </div>

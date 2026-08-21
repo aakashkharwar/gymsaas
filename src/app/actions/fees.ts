@@ -2,26 +2,21 @@
 
 import { createClient } from '@/utils/supabase/server';
 import { createPrivilegedClient } from '@/utils/supabase/admin';
+import { resolveOrgId } from '@/utils/supabase/org';
 import { revalidatePath } from 'next/cache';
+import { sendMemberReminder, sendOwnerSummary } from '@/utils/whatsapp';
 
-export async function getFees() {
+async function requireOrg() {
   const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
-  if (!userData?.user) return [];
+  if (!userData?.user) return { supabase, user: null as null, orgId: null as string | null };
+  const orgId = await resolveOrgId(supabase, userData.user);
+  return { supabase, user: userData.user, orgId };
+}
 
-  let orgId = null;
-  const { data: admin } = await supabase.from('admin_users').select('organization_id').eq('id', userData.user.id).single();
-  if (admin?.organization_id) orgId = admin.organization_id;
-  else {
-    const { data: orgByEmail } = await supabase.from('organizations').select('id').eq('owner_email', userData.user.email).limit(1).single();
-    if (orgByEmail?.id) orgId = orgByEmail.id;
-    else {
-      const { data: anyOrg } = await supabase.from('organizations').select('id').limit(1);
-      if (anyOrg && anyOrg.length > 0) orgId = anyOrg[0].id;
-    }
-  }
-
-  if (!orgId) return [];
+export async function getFees() {
+  const { user, orgId } = await requireOrg();
+  if (!user || !orgId) return [];
   const adminSupabase = await createPrivilegedClient();
   const { data: fees, error } = await adminSupabase
     .from('payments')
@@ -84,24 +79,8 @@ export async function getOverdueMembers() {
 }
 
 export async function getFeePlans() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
-
-  let orgId = null;
-  const { data: admin } = await supabase.from('admin_users').select('organization_id').eq('id', user.id).single();
-  if (admin?.organization_id) {
-    orgId = admin.organization_id;
-  } else {
-    const { data: orgByEmail } = await supabase.from('organizations').select('id').eq('owner_email', user.email).limit(1).single();
-    if (orgByEmail?.id) orgId = orgByEmail.id;
-    else {
-      const { data: anyOrg } = await supabase.from('organizations').select('id').limit(1);
-      if (anyOrg && anyOrg.length > 0) orgId = anyOrg[0].id;
-    }
-  }
-
-  if (!orgId) return [];
+  const { user, orgId } = await requireOrg();
+  if (!user || !orgId) return [];
 
   const adminSupabase = await createPrivilegedClient();
   const { data } = await adminSupabase.from('fee_plans').select('*').eq('organization_id', orgId);
@@ -187,23 +166,8 @@ export async function getFeeDashboardStats() {
 }
 
 export async function getInvoices() {
-  const supabase = await createClient();
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData?.user) return [];
-
-  let orgId = null;
-  const { data: admin } = await supabase.from('admin_users').select('organization_id').eq('id', userData.user.id).single();
-  if (admin?.organization_id) orgId = admin.organization_id;
-  else {
-    const { data: orgByEmail } = await supabase.from('organizations').select('id').eq('owner_email', userData.user.email).limit(1).single();
-    if (orgByEmail?.id) orgId = orgByEmail.id;
-    else {
-      const { data: anyOrg } = await supabase.from('organizations').select('id').limit(1);
-      if (anyOrg && anyOrg.length > 0) orgId = anyOrg[0].id;
-    }
-  }
-
-  if (!orgId) return [];
+  const { user, orgId } = await requireOrg();
+  if (!user || !orgId) return [];
   const adminSupabase = await createPrivilegedClient();
   const { data } = await adminSupabase.from('invoices').select('*').eq('organization_id', orgId).order('created_at', { ascending: false });
   return data || [];
@@ -381,24 +345,69 @@ export async function deleteFeePlan(id: string) {
 }
 
 export async function getOrganizationDetails() {
-  const supabase = await createClient();
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData?.user) return null;
-
-  let orgId = null;
-  const { data: admin } = await supabase.from('admin_users').select('organization_id').eq('id', userData.user.id).single();
-  if (admin?.organization_id) orgId = admin.organization_id;
-  else {
-    const { data: orgByEmail } = await supabase.from('organizations').select('id').eq('owner_email', userData.user.email).limit(1).single();
-    if (orgByEmail?.id) orgId = orgByEmail.id;
-    else {
-      const { data: anyOrg } = await supabase.from('organizations').select('id').limit(1);
-      if (anyOrg && anyOrg.length > 0) orgId = anyOrg[0].id;
-    }
-  }
-
-  if (!orgId) return null;
+  const { user, orgId } = await requireOrg();
+  if (!user || !orgId) return null;
   const adminSupabase = await createPrivilegedClient();
   const { data } = await adminSupabase.from('organizations').select('name, address').eq('id', orgId).single();
   return data;
+}
+
+export async function triggerFeeReminders() {
+  const { user, orgId } = await requireOrg();
+  if (!user) return { error: 'Please log in to send reminders.' };
+  if (!orgId) return { error: 'No organization found.' };
+
+  const supabase = await createPrivilegedClient();
+  const today = new Date().toISOString().split('T')[0];
+
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('id, name, owner_phone')
+    .eq('id', orgId)
+    .maybeSingle();
+
+  const { data: invoices, error } = await supabase
+    .from('invoices')
+    .select(`
+      id,
+      amount,
+      due_date,
+      status,
+      members (
+        id,
+        name,
+        phone
+      )
+    `)
+    .eq('organization_id', orgId)
+    .in('status', ['pending', 'overdue'])
+    .lte('due_date', today);
+
+  if (error) return { error: error.message };
+  if (!invoices || invoices.length === 0) {
+    return { success: true, message: 'No pending or overdue invoices to remind.' };
+  }
+
+  let sent = 0;
+  let totalAmount = 0;
+
+  for (const invoice of invoices) {
+    const member = invoice.members as { id?: string; name?: string; phone?: string } | null;
+    if (!member?.phone || !member.name) continue;
+
+    if (invoice.status === 'pending' && invoice.due_date < today) {
+      await supabase.from('invoices').update({ status: 'overdue' }).eq('id', invoice.id);
+    }
+
+    await sendMemberReminder(member.phone, member.name, org?.name || 'Gym', invoice.amount, invoice.due_date);
+    sent += 1;
+    totalAmount += Number(invoice.amount);
+  }
+
+  if (sent > 0 && org?.owner_phone) {
+    await sendOwnerSummary(org.owner_phone, org.name, sent, totalAmount);
+  }
+
+  revalidatePath('/dashboard/fees/invoices');
+  return { success: true, message: `Sent ${sent} fee reminder${sent === 1 ? '' : 's'}.` };
 }

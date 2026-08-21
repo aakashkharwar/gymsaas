@@ -18,7 +18,11 @@ export default function DashboardLayout({
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
-  // Background sync for offline fees
+  // Register offline cache so attendance scanner still works without network
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }, []);
   useEffect(() => {
     let timeout: NodeJS.Timeout;
     
@@ -81,7 +85,12 @@ export default function DashboardLayout({
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="h-16 flex items-center justify-between px-6 border-b border-slate-200 dark:border-slate-800">
           <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">GymOS</span>
-          <Button onClick={closeMobileMenu} className="md:hidden text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white p-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={closeMobileMenu}
+              className="md:hidden text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+            >
             <X className="w-5 h-5" />
           </Button>
         </div>
@@ -128,7 +137,12 @@ export default function DashboardLayout({
         {/* Top bar for mobile */}
         <header className="h-16 flex items-center justify-between px-4 sm:px-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 md:hidden z-30">
           <div className="flex items-center gap-3">
-            <Button onClick={toggleMobileMenu} className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white p-2 -ml-2 rounded-md transition-colors">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleMobileMenu}
+              className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white -ml-2"
+            >
               <Menu className="w-6 h-6" />
             </Button>
             <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">GymOS</span>

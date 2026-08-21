@@ -48,18 +48,16 @@ export default function InvoicesPage() {
   const handleTriggerReminders = async () => {
     setIsTriggering(true);
     try {
-      const res = await fetch('/api/cron/fee-reminders', {
-        headers: { 'Authorization': 'Bearer test_cron_secret_12345' }
-      });
-      const data = await res.json();
+      const m = await import('@/app/actions/fees');
+      const data = await m.triggerFeeReminders();
       if (data.success) {
-        toast.success(data.message || 'Reminders triggered successfully!');
-        import('@/app/actions/fees').then(m => m.getInvoices()).then(setInvoices);
+        toast.success(data.message || 'Reminders sent.');
+        m.getInvoices().then(setInvoices);
       } else {
-        toast.error(data.error || 'Failed to trigger reminders');
+        toast.error(data.error || 'Failed to send reminders');
       }
     } catch (e: any) {
-      toast.error(e.message || 'Error triggering reminders');
+      toast.error(e.message || 'Error sending reminders');
     } finally {
       setIsTriggering(false);
     }
@@ -293,7 +291,7 @@ export default function InvoicesPage() {
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">Invoices</h1>
+          <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">Invoices</h1>
           <p className="mt-2 text-lg text-slate-500 dark:text-slate-400">Manage member fee invoices and track statuses.</p>
         </div>
 
@@ -355,7 +353,37 @@ export default function InvoicesPage() {
             <p className="mt-2 text-slate-500 dark:text-slate-400">Generate invoices to get started.</p>
           </div>
         ) : (
-          <div className="w-full overflow-x-auto">
+          <>
+          <div className="md:hidden space-y-3 p-4">
+            {paginatedInvoices.map((inv) => {
+              const member = members.find(m => m.id === inv.member_id);
+              const plan = feePlans.find(p => p.id === inv.fee_plan_id);
+              return (
+                <div key={inv.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-900 dark:text-white truncate">{member?.name || 'Unknown member'}</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">{plan?.name || 'Plan'} · ₹{inv.amount}</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">Due {inv.due_date}</p>
+                    </div>
+                    <span className={`shrink-0 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                      inv.status === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' :
+                      inv.status === 'overdue' ? 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400' :
+                      (inv.status === 'pending' && inv.due_date === today) ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' :
+                      'bg-slate-100 text-slate-700 dark:bg-slate-500/10 dark:text-slate-400'
+                    }`}>
+                      {(inv.status === 'pending' && inv.due_date === today) ? 'Due Today' : (inv.status.charAt(0).toUpperCase() + inv.status.slice(1))}
+                    </span>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => handleDownloadPdf(inv)} className="w-full">
+                    <Download className="h-4 w-4" />
+                    PDF
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+          <div className="hidden md:block w-full overflow-x-auto">
             <table className="min-w-full text-left">
               <thead className="bg-slate-50/50 dark:bg-slate-800/30 text-sm text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                 <tr>
@@ -391,9 +419,11 @@ export default function InvoicesPage() {
 
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <Button 
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => handleDownloadPdf(inv)}
-                          className="inline-flex items-center gap-1.5 rounded-lg text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-medium text-sm transition-colors"
+                          className="inline-flex items-center gap-1.5 font-medium text-sm"
                           title="Download PDF"
                         >
                           <Download className="h-4 w-4" />
@@ -407,6 +437,7 @@ export default function InvoicesPage() {
             
               </table>
             </div>
+          </>
           )}
 
           {/* Pagination Controls */}
@@ -526,9 +557,9 @@ export default function InvoicesPage() {
                 />
               </div>
 
-              <div className="flex justify-end gap-4 pt-4">
-                <Button type="button" onClick={() => setIsModalOpen(false)} className="cursor-pointer rounded-xl border border-slate-200 dark:border-slate-700 px-6 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</Button>
-                <Button type="submit" className="cursor-pointer">Create Invoice</Button>
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} className="w-full sm:w-auto rounded-xl px-6 py-2.5 text-sm font-semibold">Cancel</Button>
+                <Button type="submit" className="w-full sm:w-auto rounded-xl px-6 py-2.5">Create Invoice</Button>
               </div>
             </form>
             </div>

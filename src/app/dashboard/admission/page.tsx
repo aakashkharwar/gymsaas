@@ -77,6 +77,7 @@ export default function AdmissionPage() {
     setIsSubmitting(false);
 
     if (result.error) {
+      toast.error(result.error);
       setErrors({ form: result.error });
     } else {
       toast.success('Admission successfully recorded!');
@@ -101,7 +102,7 @@ export default function AdmissionPage() {
 
         <form onSubmit={handleSubmit} className="px-5 py-6 sm:p-8 space-y-8" noValidate>
           {errors.form && (
-            <div className="p-4 bg-red-50 text-red-700 rounded-md border border-red-200 font-medium">
+            <div className="p-4 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 rounded-md border border-red-200 dark:border-red-900 font-medium break-words">
               {errors.form}
             </div>
           )}

@@ -149,6 +149,38 @@ input, textarea, select {
     @apply font-sans;
  }
 }
+
+[data-sonner-toaster] [data-sonner-toast] {
+  background: #fff !important;
+  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+html.dark [data-sonner-toaster] [data-sonner-toast] {
+  background: #0f172a !important;
+  color: #f8fafc !important;
+  border: 1px solid #334155 !important;
+}
+
+[data-sonner-toaster] [data-close-button] {
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+  border: 1px solid #e2e8f0 !important;
+  left: auto !important;
+  right: 8px !important;
+  top: 8px !important;
+}
+
+html.dark [data-sonner-toaster] [data-close-button] {
+  background: #1e293b !important;
+  color: #e2e8f0 !important;
+  border: 1px solid #475569 !important;
+}
+
+[data-sonner-toaster] [data-close-button] svg {
+  color: inherit !important;
+  stroke: currentColor !important;
+}
 @theme {
   --animate-pulsating-pulse: pulsating-pulse var(--duration) ease-out infinite;
   --animate-pulsating-ripple: pulsating-ripple var(--duration) ease-out infinite;

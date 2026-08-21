@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server';
 import { createPrivilegedClient } from '@/utils/supabase/admin';
+import { friendlyDbError, resolveOrgId } from '@/utils/supabase/org';
 import { revalidatePath } from 'next/cache';
 
 export async function getMembers() {
@@ -10,33 +11,7 @@ export async function getMembers() {
 
   if (!user) return [];
 
-  let orgId = null;
-  const { data: admin } = await supabase
-    .from('admin_users')
-    .select('organization_id')
-    .eq('id', user.id)
-    .single();
-
-  if (admin?.organization_id) {
-    orgId = admin.organization_id;
-  } else {
-    const { data: orgByEmail } = await supabase
-      .from('organizations')
-      .select('id')
-      .eq('owner_email', user.email)
-      .limit(1)
-      .single();
-    if (orgByEmail?.id) {
-      orgId = orgByEmail.id;
-    } else {
-      const { data: anyOrg } = await supabase
-        .from('organizations')
-        .select('id')
-        .limit(1);
-      if (anyOrg && anyOrg.length > 0) orgId = anyOrg[0].id;
-    }
-  }
-
+  const orgId = await resolveOrgId(supabase, user);
   if (!orgId) return [];
 
   const adminSupabase = await createPrivilegedClient();
@@ -61,34 +36,7 @@ export async function addMember(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Not authenticated' };
 
-  let orgId = null;
-
-  const { data: admin } = await supabase
-    .from('admin_users')
-    .select('organization_id')
-    .eq('id', user.id)
-    .single();
-
-  if (admin?.organization_id) {
-    orgId = admin.organization_id;
-  } else {
-    const { data: orgByEmail } = await supabase
-      .from('organizations')
-      .select('id')
-      .eq('owner_email', user.email)
-      .limit(1)
-      .single();
-    if (orgByEmail?.id) {
-      orgId = orgByEmail.id;
-    } else {
-      const { data: anyOrg } = await supabase
-        .from('organizations')
-        .select('id')
-        .limit(1);
-      if (anyOrg && anyOrg.length > 0) orgId = anyOrg[0].id;
-    }
-  }
-
+  const orgId = await resolveOrgId(supabase, user);
   if (!orgId) return { error: 'No organization found' };
 
   const name = formData.get('name') as string;
@@ -116,7 +64,7 @@ export async function addMember(formData: FormData) {
     ]);
 
   if (error) {
-    return { error: error.message };
+    return { error: friendlyDbError(error.message) };
   }
 
   revalidatePath('/dashboard/members');
@@ -153,7 +101,7 @@ export async function updateMember(id: string, formData: FormData) {
     .eq('id', id);
 
   if (error) {
-    return { error: error.message };
+    return { error: friendlyDbError(error.message) };
   }
 
   revalidatePath('/dashboard/members');
@@ -167,34 +115,7 @@ export async function submitAdmissionForm(formData: FormData) {
 
   if (!user) return { error: 'Unauthorized' };
 
-  let orgId = null;
-
-  const { data: admin } = await supabase
-    .from('admin_users')
-    .select('organization_id')
-    .eq('id', user.id)
-    .single();
-
-  if (admin?.organization_id) {
-    orgId = admin.organization_id;
-  } else {
-    const { data: orgByEmail } = await supabase
-      .from('organizations')
-      .select('id')
-      .eq('owner_email', user.email)
-      .limit(1)
-      .single();
-    if (orgByEmail?.id) {
-      orgId = orgByEmail.id;
-    } else {
-      const { data: anyOrg } = await supabase
-        .from('organizations')
-        .select('id')
-        .limit(1);
-      if (anyOrg && anyOrg.length > 0) orgId = anyOrg[0].id;
-    }
-  }
-
+  const orgId = await resolveOrgId(supabase, user);
   if (!orgId) return { error: 'No organization found' };
 
   const name = formData.get('name') as string;
@@ -238,7 +159,7 @@ export async function submitAdmissionForm(formData: FormData) {
 
   if (error) {
     console.error('Error submitting admission:', error);
-    return { error: error.message };
+    return { error: friendlyDbError(error.message) };
   }
 
   revalidatePath('/dashboard/members');

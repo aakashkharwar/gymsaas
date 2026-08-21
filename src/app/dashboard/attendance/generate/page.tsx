@@ -110,27 +110,23 @@ export default function QRGeneratorPage() {
   <title>Print QR - ${token}</title>
   <style>
     body { display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: #eee; }
-    .card { position: relative; background: #000; color: #fff; width: 340px; min-height: 540px; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; padding: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
-    .top-xs { position: absolute; top: 20px; right: 20px; font-weight: 900; font-size: 20px; letter-spacing: 2px; }
-    .side-xs { position: absolute; top: 50%; right: 10px; transform: translateY(-50%); display: flex; flex-direction: column; font-weight: 900; font-size: 16px; line-height: 1; gap: 4px; }
-    h1 { margin: 20px 0 0; font-size: 42px; font-weight: 900; text-transform: uppercase; line-height: 0.9; text-align: center; }
-    h2 { margin: 5px 0 0; font-size: 26px; font-weight: 700; text-transform: uppercase; line-height: 1; text-align: center; }
-    p.desc { text-align: center; font-size: 14px; color: #ccc; margin: 20px 0; line-height: 1.4; }
-    .qr-container { position: relative; margin: 10px 0; display: flex; justify-content: center; width: 100%; }
-    img { width: ${size}px; height: ${size}px; display: block; }
+    .card { background: #000; color: #fff; width: min(340px, 92vw); min-height: 480px; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; padding: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+    h1 { margin: 8px 0 0; font-size: clamp(22px, 8vw, 36px); font-weight: 900; text-transform: uppercase; line-height: 1; text-align: center; word-break: break-word; }
+    h2 { margin: 6px 0 0; font-size: clamp(14px, 5vw, 22px); font-weight: 700; text-transform: uppercase; line-height: 1.1; text-align: center; }
+    p.desc { text-align: center; font-size: 13px; color: #ccc; margin: 16px 0; line-height: 1.4; }
+    .qr-container { margin: 10px 0; display: flex; justify-content: center; width: 100%; }
+    img { width: min(${size}px, 70vw); height: auto; display: block; background: #fff; padding: 8px; }
     .footer { margin-top: 25px; text-align: center; font-size: 13px; font-style: italic; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #fff; }
     .footer div { margin: 4px 0; }
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="top-xs">XXX</div>
     <h1>${gymName}</h1>
     <h2>ATTENDANCE SCANNER</h2>
     <p class="desc">Please scan this QR code using your<br/>phone or show it to the receptionist<br/>to mark your daily attendance.</p>
     <div class="qr-container">
       <img src="${qrDataUrl}" alt="qr" />
-      <div class="side-xs"><span>X</span><span>X</span><span>X</span></div>
     </div>
     <div class="footer">
       <div>ID : ${token}</div>
@@ -156,7 +152,7 @@ export default function QRGeneratorPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-5xl min-w-0 space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Generate QR</h1>
@@ -168,7 +164,7 @@ export default function QRGeneratorPage() {
         </Link>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
+      <div className="grid gap-6 lg:grid-cols-2 min-w-0">
         {/* Left Column: Form */}
         <div className="flex flex-col gap-6 min-w-0">
           <div className="w-full min-w-0 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-8 shadow-sm transition-colors">
@@ -187,7 +183,7 @@ export default function QRGeneratorPage() {
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Token ID</label>
-                <div className="flex gap-3">
+                <div className="flex min-w-0 gap-2">
                   <input 
                     value={token} 
                     onChange={(e) => setToken(e.target.value)} 
@@ -195,12 +191,13 @@ export default function QRGeneratorPage() {
                     placeholder="GYM-XXX"
                   />
                   <Button 
-                    type="button" 
+                    type="button"
+                    variant="outline"
                     onClick={() => setToken(`GYM-${Math.floor(100 + Math.random() * 900)}`)} 
-                    className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-200 dark:hover:bg-slate-700"
+                    className="shrink-0 rounded-xl px-3 sm:px-4 py-3 text-sm font-semibold"
                   >
                     <RefreshCw className="h-4 w-4" />
-                    Random
+                    <span className="hidden sm:inline">Random</span>
                   </Button>
                 </div>
               </div>
@@ -251,42 +248,39 @@ export default function QRGeneratorPage() {
         </div>
 
         {/* Right Column: Preview & Saved */}
-        <div className="flex flex-col gap-6">
-          <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 sm:p-8 shadow-sm transition-colors text-center">
-            <h2 className="mb-6 text-xl font-bold text-slate-900 dark:text-white text-left">Live Preview</h2>
+        <div className="flex flex-col gap-6 min-w-0">
+          <div className="w-full min-w-0 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-sm transition-colors text-center">
+            <h2 className="mb-4 text-xl font-bold text-slate-900 dark:text-white text-left">Live Preview</h2>
             
-            <div className="flex min-h-[500px] items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30 p-4 overflow-hidden">
+            <div className="flex w-full min-w-0 items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30 p-2 sm:p-3">
               {qrDataUrl ? (
-                <div className="relative flex flex-col items-center bg-black p-8 shadow-2xl overflow-hidden shrink-0" style={{ width: 340, minHeight: 540 }}>
-                  <div className="absolute top-4 right-4 text-white text-xl font-black tracking-widest leading-none">
-                    XXX
-                  </div>
-                  
-                  <h1 className="text-white text-[42px] font-black text-center uppercase leading-[0.9] mt-8 w-full break-words">
+                <div className="w-full max-w-[280px] mx-auto bg-black px-4 py-6 sm:px-5 sm:py-8 text-white shadow-2xl box-border">
+                  <h1 className="text-white text-2xl sm:text-3xl font-black text-center uppercase leading-tight break-words">
                     {gymName}
                   </h1>
-                  <h2 className="text-white text-[26px] font-bold text-center uppercase leading-none mt-1 w-full">
-                    ATTENDANCE SCANNER
+                  <h2 className="text-white text-base sm:text-xl font-bold text-center uppercase leading-tight mt-1 break-words">
+                    Attendance Scanner
                   </h2>
                   
-                  <p className="text-gray-300 text-center text-sm mt-5 leading-relaxed px-2">
-                    Please scan this QR code using your<br/>phone or show it to the receptionist<br/>to mark your daily attendance.
+                  <p className="text-gray-300 text-center text-xs sm:text-sm mt-4 leading-relaxed">
+                    Please scan this QR code using your phone or show it to the receptionist to mark your daily attendance.
                   </p>
                   
-                  <div className="relative mt-5 flex justify-center w-full">
-                    <img src={qrDataUrl} alt="QR Preview" style={{ width: 200, height: 200 }} className="block" />
-                    <div className="absolute top-1/2 right-2 -translate-y-1/2 flex flex-col space-y-1 text-white text-lg font-black leading-none">
-                      <span>X</span><span>X</span><span>X</span>
-                    </div>
+                  <div className="mt-4 flex justify-center w-full">
+                    <img
+                      src={qrDataUrl}
+                      alt="QR Preview"
+                      className="block w-[70%] max-w-[200px] aspect-square object-contain bg-white p-2"
+                    />
                   </div>
 
-                  <div className="mt-8 text-center text-white text-[13px] italic font-semibold uppercase tracking-wider space-y-1.5">
+                  <div className="mt-5 text-center text-white text-[11px] sm:text-xs italic font-semibold uppercase tracking-wider space-y-1 break-words">
                     <p>ID : {token}</p>
                     <p>LABEL : {label || 'N/A'}</p>
                   </div>
                 </div>
               ) : (
-                <div className="text-sm text-slate-400 dark:text-slate-500">Click Generate to preview</div>
+                <div className="py-16 text-sm text-slate-400 dark:text-slate-500">Click Generate to preview</div>
               )}
             </div>
             
@@ -295,12 +289,12 @@ export default function QRGeneratorPage() {
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{token}</p>
             </div>
 
-            <div className="mt-6 flex justify-center gap-3">
-              <Button onClick={downloadPng} disabled={!qrDataUrl} className="inline-flex items-center gap-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 shadow-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <Button variant="outline" onClick={downloadPng} disabled={!qrDataUrl} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50">
                 <Download className="h-4 w-4" />
                 Download
               </Button>
-              <Button onClick={printPreview} disabled={!qrDataUrl} className="inline-flex items-center gap-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 shadow-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">
+              <Button variant="outline" onClick={printPreview} disabled={!qrDataUrl} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50">
                 <Printer className="h-4 w-4" />
                 Print
               </Button>

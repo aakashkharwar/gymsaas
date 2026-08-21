@@ -61,42 +61,29 @@ export async function getDashboardStats() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { members: 0, overdue: 0, profit: 0, totalRevenue: 0, totalExpenses: 0, newMembers: 0, recentActivity: [] };
 
-  // Fetch all members count
-  const { count: memberCount } = await supabase
-    .from('members')
-    .select('*', { count: 'exact', head: true });
-
-  // Fetch overdue invoices count
   const today = new Date().toISOString().split('T')[0];
-  const { count: overdueCount } = await supabase
-    .from('invoices')
-    .select('*', { count: 'exact', head: true })
-    .lt('due_date', today)
-    .neq('status', 'paid');
-
-  // Calculate Monthly Profit (Current Month Payments - Expenses)
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
+  const startIso = startOfMonth.toISOString();
 
-  const { data: payments } = await supabase
-    .from('payments')
-    .select('amount')
-    .gte('paid_at', startOfMonth.toISOString());
-
-  const { data: expenses } = await supabase
-    .from('expenses')
-    .select('amount')
-    .gte('expense_date', startOfMonth.toISOString());
+  const [
+    { count: memberCount },
+    { count: overdueCount },
+    { data: payments },
+    { data: expenses },
+    { count: newMembersCount },
+  ] = await Promise.all([
+    supabase.from('members').select('*', { count: 'exact', head: true }),
+    supabase.from('invoices').select('*', { count: 'exact', head: true }).lt('due_date', today).neq('status', 'paid'),
+    supabase.from('payments').select('amount').gte('paid_at', startIso),
+    supabase.from('expenses').select('amount').gte('expense_date', startIso),
+    supabase.from('members').select('*', { count: 'exact', head: true }).gte('created_at', startIso),
+  ]);
 
   const totalRevenue = payments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
   const totalExpenses = expenses?.reduce((sum, e) => sum + Number(e.amount), 0) || 0;
   const profit = totalRevenue - totalExpenses;
-
-  const { count: newMembersCount } = await supabase
-    .from('members')
-    .select('*', { count: 'exact', head: true })
-    .gte('created_at', startOfMonth.toISOString());
 
   return {
     members: memberCount || 0,

@@ -69,7 +69,12 @@ export default function MembersPage() {
       import('@/app/actions/fees').then(m => m.getFeePlans ? m.getFeePlans() : import('@/utils/fee-store').then(s => s.getFeePlans()))
     ]).then(([memberList, planList]) => {
       if (mounted) {
-        if (Array.isArray(memberList)) setMembers(memberList as any[]);
+        if (Array.isArray(memberList)) {
+          setMembers(memberList as any[]);
+          import('@/utils/storage').then((s) => s.saveMembers(
+            (memberList as any[]).map((mem) => ({ ...mem, qrCode: mem.phone, username: mem.phone }))
+          )).catch(() => {});
+        }
         if (Array.isArray(planList)) setFeePlans(planList);
       }
     }).catch(() => {
@@ -251,14 +256,14 @@ export default function MembersPage() {
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">Members</h1>
+          <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">Members</h1>
           <p className="mt-2 text-lg text-slate-500 dark:text-slate-400">Manage your gym members and their subscriptions.</p>
         </div>
 
-        <Button variant="outline"
+        <Button
           type="button"
           onClick={handleAddNewClick}
-          className="cursor-pointer inline-flex items-center justify-center gap-2 text-base transition"
+          className="w-full sm:w-auto cursor-pointer inline-flex items-center justify-center gap-2"
         >
           <Plus className="h-5 w-5" />
           Add Member
@@ -300,7 +305,43 @@ export default function MembersPage() {
             <p className="mt-2 text-slate-500 dark:text-slate-400">Get started by adding your first gym member.</p>
           </div>
         ) : (
-          <div className="w-full overflow-x-auto">
+          <>
+          <div className="md:hidden space-y-3 p-4">
+            {filteredMembers.map((member) => (
+              <div key={member.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900 dark:text-white truncate">{member.name}</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">{member.phone}</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      {feePlans.find(p => p.id === member.fee_plan_id)?.name || member.plan_type || 'No plan'}
+                    </p>
+                  </div>
+                  <span
+                    className={`shrink-0 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                      member.status === 'active'
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
+                        : member.status === 'inactive'
+                          ? 'bg-slate-100 text-slate-700 dark:bg-slate-500/10 dark:text-slate-400'
+                          : 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
+                    }`}
+                  >
+                    {member.status}
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEditClick(member)}
+                  className="w-full"
+                >
+                  Edit
+                </Button>
+              </div>
+            ))}
+          </div>
+          <div className="hidden md:block w-full overflow-x-auto">
             <table className="min-w-full text-left">
               <thead className="bg-slate-50/50 dark:bg-slate-800/30 text-sm text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                 <tr>
@@ -346,9 +387,11 @@ export default function MembersPage() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <Button 
-                        type="button" 
+                        type="button"
+                        variant="outline"
+                        size="sm"
                         onClick={() => handleEditClick(member)}
-                        className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                        className="text-sm font-medium text-indigo-700 border-indigo-200 hover:bg-indigo-50 dark:text-indigo-300 dark:border-indigo-800 dark:hover:bg-indigo-950"
                       >
                         Edit
                       </Button>
@@ -358,6 +401,7 @@ export default function MembersPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 
@@ -501,22 +545,23 @@ export default function MembersPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-4 border-t border-slate-100 dark:border-slate-800 pt-6 mt-8">
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800 pt-6 mt-8">
                 <Button
                   type="button"
+                  variant="outline"
                   onClick={() => {
                     setIsModalOpen(false);
                     setErrors({});
                     setEditingMemberId(null);
                   }}
-                  className="cursor-pointer rounded-xl border border-slate-200 dark:border-slate-700 px-6 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                  className="w-full sm:w-auto rounded-xl px-6 py-2.5 text-sm font-semibold"
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="cursor-pointer transition-colors disabled:opacity-70"
+                  className="w-full sm:w-auto rounded-xl px-6 py-2.5"
                 >
                   {isSubmitting 
                     ? 'Saving...' 

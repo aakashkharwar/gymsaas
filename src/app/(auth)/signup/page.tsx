@@ -26,6 +26,15 @@ export default function SignupPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
     const router = useRouter();
 
+  const clearField = (field: string) => {
+    setFormErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+
   useEffect(() => {
     if (!state) return;
 
@@ -127,6 +136,7 @@ export default function SignupPage() {
               formErrors.gym_name ? 'border-red-300 dark:border-red-500/50 focus:border-red-500 focus:ring-red-500/20' : 'border-slate-200 dark:border-slate-700'
             }`}
             placeholder="e.g. Acme Fitness"
+            onChange={() => clearField('gym_name')}
           />
           {formErrors.gym_name && (
             <p className="mt-1.5 text-xs text-red-600 dark:text-red-400 font-medium">{formErrors.gym_name}</p>
@@ -146,6 +156,7 @@ export default function SignupPage() {
                 formErrors.owner_name ? 'border-red-300 dark:border-red-500/50 focus:border-red-500 focus:ring-red-500/20' : 'border-slate-200 dark:border-slate-700'
               }`}
               placeholder="e.g. John Doe"
+              onChange={() => clearField('owner_name')}
             />
             {formErrors.owner_name && (
               <p className="mt-1.5 text-xs text-red-600 dark:text-red-400 font-medium">{formErrors.owner_name}</p>
@@ -163,6 +174,7 @@ export default function SignupPage() {
                 formErrors.owner_phone ? 'border-red-300 dark:border-red-500/50 focus:border-red-500 focus:ring-red-500/20' : 'border-slate-200 dark:border-slate-700'
               }`}
               placeholder="e.g. 9876543210"
+              onChange={() => clearField('owner_phone')}
             />
             {formErrors.owner_phone && (
               <p className="mt-1.5 text-xs text-red-600 dark:text-red-400 font-medium">{formErrors.owner_phone}</p>
@@ -183,6 +195,7 @@ export default function SignupPage() {
               formErrors.owner_email ? 'border-red-300 dark:border-red-500/50 focus:border-red-500 focus:ring-red-500/20' : 'border-slate-200 dark:border-slate-700'
             }`}
             placeholder="e.g. john@example.com"
+            onChange={() => clearField('owner_email')}
           />
           {formErrors.owner_email && (
             <p className="mt-1.5 text-xs text-red-600 dark:text-red-400 font-medium">{formErrors.owner_email}</p>
@@ -202,6 +215,7 @@ export default function SignupPage() {
               formErrors.password ? 'border-red-300 dark:border-red-500/50 focus:border-red-500 focus:ring-red-500/20' : 'border-slate-200 dark:border-slate-700'
             }`}
             placeholder="••••••••"
+            onChange={() => clearField('password')}
           />
           {formErrors.password && (
             <p className="mt-1.5 text-xs text-red-600 dark:text-red-400 font-medium">{formErrors.password}</p>
@@ -212,7 +226,7 @@ export default function SignupPage() {
           <Button
             type="submit"
             disabled={isPending}
-            className="group relative w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
+            className="group relative w-full h-11 flex justify-center items-center gap-2 py-3 px-4 rounded-lg text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-600 dark:hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
           >
             {isPending ? (
               <>
