@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { login } from '@/app/actions/auth';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, CheckCircle2, Loader2, XCircle } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 function normalizeMessage(value: unknown): string | null {
   if (typeof value === 'string') return value;

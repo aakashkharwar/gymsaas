@@ -41,16 +41,17 @@ export async function updateSession(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser()
 
+    const isServerAction = request.method !== 'GET' && request.headers.has('next-action')
     const url = request.nextUrl.clone()
 
-    if (request.nextUrl.pathname.startsWith('/dashboard')) {
+    if (!isServerAction && request.nextUrl.pathname.startsWith('/dashboard')) {
       if (!user) {
         url.pathname = '/login'
         return NextResponse.redirect(url)
       }
     }
 
-    if (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup') {
+    if (!isServerAction && (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup')) {
       if (user) {
         url.pathname = '/dashboard'
         return NextResponse.redirect(url)
