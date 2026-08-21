@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server';
-import { createAdminClient } from '@/utils/supabase/admin';
+import { createPrivilegedClient } from '@/utils/supabase/admin';
 import { revalidatePath } from 'next/cache';
 
 export async function getFees() {
@@ -22,7 +22,7 @@ export async function getFees() {
   }
 
   if (!orgId) return [];
-  const adminSupabase = createAdminClient();
+  const adminSupabase = await createPrivilegedClient();
   const { data: fees, error } = await adminSupabase
     .from('payments')
     .select(`
@@ -60,7 +60,7 @@ export async function getOverdueMembers() {
   }
 
   if (!orgId) return [];
-  const adminSupabase = createAdminClient();
+  const adminSupabase = await createPrivilegedClient();
   const today = new Date().toISOString().split('T')[0];
   
   const { data: overdue, error } = await adminSupabase
@@ -103,7 +103,7 @@ export async function getFeePlans() {
 
   if (!orgId) return [];
 
-  const adminSupabase = createAdminClient();
+  const adminSupabase = await createPrivilegedClient();
   const { data } = await adminSupabase.from('fee_plans').select('*').eq('organization_id', orgId);
   return data || [];
 }
@@ -132,7 +132,7 @@ export async function addFeePlan(formData: FormData) {
   const amount = Number(formData.get('amount'));
   const duration_months = Number(formData.get('duration_months'));
 
-  const adminSupabase = createAdminClient();
+  const adminSupabase = await createPrivilegedClient();
   const { error } = await adminSupabase.from('fee_plans').insert({
     organization_id: orgId,
     name,
@@ -167,7 +167,7 @@ export async function getFeeDashboardStats() {
   }
 
   if (!orgId) return { totalCollectedToday: 0, totalCollectedMonth: 0, totalPendingDues: 0, overdueCount: 0 };
-  const adminSupabase = createAdminClient();
+  const adminSupabase = await createPrivilegedClient();
   const today = new Date().toISOString().split('T')[0];
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
@@ -204,7 +204,7 @@ export async function getInvoices() {
   }
 
   if (!orgId) return [];
-  const adminSupabase = createAdminClient();
+  const adminSupabase = await createPrivilegedClient();
   const { data } = await adminSupabase.from('invoices').select('*').eq('organization_id', orgId).order('created_at', { ascending: false });
   return data || [];
 }
@@ -227,7 +227,7 @@ export async function addInvoice(formData: FormData) {
   }
 
   if (!orgId) return { error: 'No organization found' };
-  const adminSupabase = createAdminClient();
+  const adminSupabase = await createPrivilegedClient();
 
   const member_id = String(formData.get('member_id'));
   const fee_plan_id = String(formData.get('fee_plan_id'));
@@ -273,7 +273,7 @@ export async function addPayment(formData: FormData) {
   }
 
   if (!orgId) return { error: 'No organization found' };
-  const adminSupabase = createAdminClient();
+  const adminSupabase = await createPrivilegedClient();
 
   const member_id = String(formData.get('member_id'));
   const invoice_id = formData.get('invoice_id') ? String(formData.get('invoice_id')) : null;
@@ -333,7 +333,7 @@ export async function updateFeePlan(id: string, formData: FormData) {
   const amount = Number(formData.get('amount'));
   const duration_months = Number(formData.get('duration_months'));
 
-  const adminSupabase = createAdminClient();
+  const adminSupabase = await createPrivilegedClient();
   const { error } = await adminSupabase.from('fee_plans').update({
     name,
     amount,
@@ -368,7 +368,7 @@ export async function deleteFeePlan(id: string) {
 
   if (!orgId) return { error: 'No organization found' };
 
-  const adminSupabase = createAdminClient();
+  const adminSupabase = await createPrivilegedClient();
   const { error } = await adminSupabase.from('fee_plans').delete().eq('id', id).eq('organization_id', orgId);
 
   if (error) {
@@ -398,7 +398,7 @@ export async function getOrganizationDetails() {
   }
 
   if (!orgId) return null;
-  const adminSupabase = createAdminClient();
+  const adminSupabase = await createPrivilegedClient();
   const { data } = await adminSupabase.from('organizations').select('name, address').eq('id', orgId).single();
   return data;
 }

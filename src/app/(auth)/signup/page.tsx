@@ -38,7 +38,8 @@ export default function SignupPage() {
     const successMessage = normalizeMessage(state.success);
     if (successMessage) {
       toast.success(successMessage);
-      const timeout = setTimeout(() => router.push('/onboarding'), 1200);
+      const href = state.redirectTo || '/onboarding';
+      const timeout = setTimeout(() => router.push(href), 1200);
       return () => clearTimeout(timeout);
     }
   }, [state, router]);

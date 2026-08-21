@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server';
-import { createAdminClient } from '@/utils/supabase/admin';
+import { createPrivilegedClient } from '@/utils/supabase/admin';
 import { revalidatePath } from 'next/cache';
 
 export async function getMembers() {
@@ -39,7 +39,7 @@ export async function getMembers() {
 
   if (!orgId) return [];
 
-  const adminSupabase = createAdminClient();
+  const adminSupabase = await createPrivilegedClient();
   const { data: members, error } = await adminSupabase
     .from('members')
     .select('*')
@@ -100,7 +100,7 @@ export async function addMember(formData: FormData) {
   const notes = formData.get('notes') as string;
   const plan_type = formData.get('plan_type') as string;
 
-  const adminSupabase = createAdminClient();
+  const adminSupabase = await createPrivilegedClient();
   const { error } = await adminSupabase.from('members').insert([
       {
         organization_id: orgId,
@@ -223,7 +223,7 @@ export async function submitAdmissionForm(formData: FormData) {
   if (secondaryGoals.length > 0) formattedNotes += `Secondary Goals: ${secondaryGoals.join(', ')}\n`;
   if (healthIssues.length > 0) formattedNotes += `Health Profile: ${healthIssues.join(', ')}\n`;
 
-  const adminSupabase = createAdminClient();
+  const adminSupabase = await createPrivilegedClient();
   const { error } = await adminSupabase.from('members').insert([
       {
         organization_id: orgId,

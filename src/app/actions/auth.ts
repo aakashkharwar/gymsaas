@@ -1,11 +1,13 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server';
-import { getSupabaseConfigOrNull } from '@/utils/supabase/config';
+import { createPrivilegedClient } from '@/utils/supabase/admin';
+import { getSiteUrl, getSupabaseConfigOrNull } from '@/utils/supabase/config';
 
 export type AuthState = {
   error?: string;
   success?: string;
+  redirectTo?: string;
 };
 
 function missingSupabaseConfigError(): AuthState {
@@ -59,7 +61,7 @@ export async function requestPasswordReset(_prevState: AuthState | null, formDat
 
     const supabase = await createClient();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/reset-password`,
+      redirectTo: `${getSiteUrl()}/reset-password`,
     });
 
     if (error) {
@@ -85,7 +87,7 @@ export async function signup(prevState: AuthState | null, formData: FormData): P
     const password = String(formData.get('password') ?? '');
     const gymName = String(formData.get('gym_name') ?? '').trim();
     const ownerName = String(formData.get('owner_name') ?? '').trim();
-    const ownerPhone = String(formData.get('owner_phone') ?? '').trim();
+    const ownerPhone = String(formData.get('owner_phone') ?? '').replace(/\D/g, '').slice(0, 15);
 
     if (!email || !password || !gymName || !ownerName || !ownerPhone) {
       return { error: 'Please fill in all required fields.' };
@@ -97,6 +99,7 @@ export async function signup(prevState: AuthState | null, formData: FormData): P
       email,
       password,
       options: {
+        emailRedirectTo: `${getSiteUrl()}/login`,
         data: {
           full_name: ownerName,
           phone: ownerPhone,
@@ -115,14 +118,17 @@ export async function signup(prevState: AuthState | null, formData: FormData): P
 
     const baseSlug = gymName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || `gym-${Date.now()}`;
     const slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
+    const bootstrap = await createPrivilegedClient();
+    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
 
-    const { data: orgData, error: orgError } = await supabase.from('organizations').insert({
+    const { data: orgData, error: orgError } = await bootstrap.from('organizations').insert({
       name: gymName,
       slug,
       owner_name: ownerName,
       owner_phone: ownerPhone,
       owner_email: email,
-      plan: 'trial'
+      plan: 'trial',
+      trial_ends_at: trialEndsAt,
     }).select('id').single();
 
     if (orgError) {
@@ -130,17 +136,17 @@ export async function signup(prevState: AuthState | null, formData: FormData): P
       return { error: `Workspace creation failed: ${orgError.message}` };
     }
 
-    const { error: adminError } = await supabase.from('admin_users').insert({
+    const { error: adminError } = await bootstrap.from('admin_users').upsert({
       id: userId,
       organization_id: orgData.id,
-      email: email
-    });
+      email,
+    }, { onConflict: 'id' });
 
     if (adminError) {
       console.error('Admin creation failed:', adminError);
     }
 
-    const { error: feePlanError } = await supabase.from('fee_plans').insert({
+    const { error: feePlanError } = await bootstrap.from('fee_plans').insert({
       organization_id: orgData.id,
       name: 'Standard Monthly',
       amount: 1500,
@@ -151,7 +157,17 @@ export async function signup(prevState: AuthState | null, formData: FormData): P
       console.error('Default fee plan creation failed:', feePlanError);
     }
 
-    return { success: 'Account created successfully. Redirecting you to onboarding...' };
+    if (!authData.session) {
+      return {
+        success: 'Account created. Check your email to confirm, then log in.',
+        redirectTo: '/login',
+      };
+    }
+
+    return {
+      success: 'Account created successfully. Redirecting you to onboarding...',
+      redirectTo: '/onboarding',
+    };
   } catch (err) {
     console.error('signup failed:', err);
     return { error: err instanceof Error ? err.message : 'Signup failed. Please try again.' };
