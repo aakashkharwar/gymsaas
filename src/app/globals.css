@@ -181,6 +181,126 @@ html.dark [data-sonner-toaster] [data-close-button] {
   color: inherit !important;
   stroke: currentColor !important;
 }
+
+html {
+  scroll-behavior: smooth;
+}
+
+.page-shell {
+  animation: page-enter 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.reveal {
+  animation: page-enter 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.reveal-delay-1 { animation-delay: 80ms; }
+.reveal-delay-2 { animation-delay: 160ms; }
+.reveal-delay-3 { animation-delay: 240ms; }
+.reveal-delay-4 { animation-delay: 320ms; }
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes blob {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(28px, -36px) scale(1.08); }
+  66% { transform: translate(-22px, 18px) scale(0.94); }
+}
+
+.animate-blob {
+  animation: blob 18s ease-in-out infinite;
+}
+
+.animation-delay-2000 { animation-delay: 2s; }
+.animation-delay-4000 { animation-delay: 4s; }
+
+.ambient-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  opacity: 0.28;
+  animation: blob 22s ease-in-out infinite;
+}
+
+.ambient-blob-a {
+  top: -8rem;
+  left: -6rem;
+  width: 28rem;
+  height: 28rem;
+  background: #818cf8;
+}
+
+.ambient-blob-b {
+  top: 20%;
+  right: -8rem;
+  width: 26rem;
+  height: 26rem;
+  background: #34d399;
+  animation-delay: 4s;
+}
+
+.ambient-blob-c {
+  bottom: -10rem;
+  left: 30%;
+  width: 32rem;
+  height: 32rem;
+  background: #60a5fa;
+  animation-delay: 8s;
+}
+
+html.dark .ambient-blob {
+  opacity: 0.14;
+}
+
+.ambient-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+}
+
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+
+.animate-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.animate-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent);
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+html.dark .animate-shimmer::after {
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.08), transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .page-shell,
+  .reveal,
+  .animate-blob,
+  .ambient-blob,
+  .animate-shimmer::after {
+    animation: none !important;
+  }
+}
 @theme {
   --animate-pulsating-pulse: pulsating-pulse var(--duration) ease-out infinite;
   --animate-pulsating-ripple: pulsating-ripple var(--duration) ease-out infinite;

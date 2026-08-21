@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { sendOwnerSummary, sendMemberReminder } from '@/utils/whatsapp';
+import { sendMembershipExpiryEmail } from '@/utils/email';
 
 
 export async function GET(req: Request) {
@@ -36,7 +37,8 @@ export async function GET(req: Request) {
           members (
             id,
             name,
-            phone
+            phone,
+            email
           )
         `)
         .eq('organization_id', org.id)
@@ -49,10 +51,10 @@ export async function GET(req: Request) {
       let totalAmount = 0;
 
       for (const invoice of invoices) {
-        const member = invoice.members as any;
+        const memberRaw = invoice.members as { name?: string; phone?: string; email?: string } | { name?: string; phone?: string; email?: string }[] | null;
+        const member = Array.isArray(memberRaw) ? memberRaw[0] : memberRaw;
         if (!member) continue;
 
-        // Auto-mark pending as overdue if due_date is in the past (before today)
         if (invoice.status === 'pending' && invoice.due_date < today) {
           await supabase
             .from('invoices')
@@ -60,14 +62,25 @@ export async function GET(req: Request) {
             .eq('id', invoice.id);
         }
 
-        // Send Member Reminder
-        await sendMemberReminder(
-          member.phone,
-          member.name,
-          org.name,
-          invoice.amount,
-          invoice.due_date
-        );
+        if (member.email && member.name) {
+          await sendMembershipExpiryEmail({
+            memberEmail: member.email,
+            memberName: member.name,
+            gymName: org.name,
+            dueDate: invoice.due_date,
+            amount: Number(invoice.amount),
+          });
+        }
+
+        if (member.phone && member.name) {
+          await sendMemberReminder(
+            member.phone,
+            member.name,
+            org.name,
+            invoice.amount,
+            invoice.due_date
+          );
+        }
         
         overdueCount++;
         totalAmount += Number(invoice.amount);

@@ -1,0 +1,43 @@
+<!--
+  Paste this into Supabase Dashboard:
+  Authentication → Email Templates → Magic link
+
+  Subject:
+  Welcome to GymOS
+-->
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f1f5f9;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:16px;border:1px solid #e2e8f0;overflow:hidden;">
+          <tr>
+            <td style="background:#4f46e5;padding:28px 32px;">
+              <p style="margin:0;color:#c7d2fe;font-size:11px;letter-spacing:0.16em;font-family:Arial,Helvetica,sans-serif;font-weight:bold;">GYMOS</p>
+              <h1 style="margin:10px 0 0;color:#ffffff;font-size:26px;line-height:1.25;font-family:Arial,Helvetica,sans-serif;">Welcome to GymOS</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;font-family:Arial,Helvetica,sans-serif;color:#334155;font-size:15px;line-height:1.65;">
+              <p style="margin:0 0 14px;">Hi {{ if .Data.full_name }}{{ .Data.full_name }}{{ else }}there{{ end }},</p>
+              <p style="margin:0 0 14px;">{{ if .Data.gym_name }}Your gym <strong>{{ .Data.gym_name }}</strong> is live on GymOS.{{ else }}Your gym workspace is live on GymOS.{{ end }} You can add members, collect fees, and track attendance from one dashboard.</p>
+              <p style="margin:0;">Start with these:</p>
+              <ul style="margin:10px 0 0;padding-left:18px;color:#475569;">
+                <li>Add your first member</li>
+                <li>Set a fee plan</li>
+                <li>Mark attendance</li>
+              </ul>
+              <p style="margin:28px 0 0;">
+                <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:bold;font-size:14px;">Open your dashboard</a>
+              </p>
+              <p style="margin:28px 0 0;color:#64748b;font-size:13px;">You're on a 14-day trial. Your account is already ready.</p>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:18px 0 0;color:#94a3b8;font-size:12px;font-family:Arial,Helvetica,sans-serif;">Sent by GymOS</p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

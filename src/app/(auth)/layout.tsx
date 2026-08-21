@@ -8,7 +8,7 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 py-8 px-4 sm:px-6 lg:px-8 relative overflow-hidden transition-colors duration-300">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50/70 dark:bg-slate-950/70 py-8 px-4 sm:px-6 lg:px-8 relative overflow-hidden transition-colors duration-300">
       {/* Back to Home Button */}
       <Link 
         href="/" 

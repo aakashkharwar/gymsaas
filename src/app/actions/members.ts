@@ -3,6 +3,7 @@
 import { createClient } from '@/utils/supabase/server';
 import { createPrivilegedClient } from '@/utils/supabase/admin';
 import { friendlyDbError, resolveOrgId } from '@/utils/supabase/org';
+import { sendAdmissionEmail } from '@/utils/email';
 import { revalidatePath } from 'next/cache';
 
 export async function getMembers() {
@@ -67,6 +68,16 @@ export async function addMember(formData: FormData) {
     return { error: friendlyDbError(error.message) };
   }
 
+  if (email) {
+    const { data: org } = await adminSupabase.from('organizations').select('name').eq('id', orgId).maybeSingle();
+    sendAdmissionEmail({
+      memberEmail: email,
+      memberName: name,
+      gymName: org?.name || 'the gym',
+      phone,
+    }).catch((err) => console.error('member welcome email failed:', err));
+  }
+
   revalidatePath('/dashboard/members');
   return { success: true };
 }
@@ -120,6 +131,7 @@ export async function submitAdmissionForm(formData: FormData) {
 
   const name = formData.get('name') as string;
   const phone = formData.get('phone') as string;
+  const email = String(formData.get('email') ?? '').trim();
   const address = formData.get('address') as string;
   
   // Format all fitness assessment data into the notes field
@@ -150,6 +162,7 @@ export async function submitAdmissionForm(formData: FormData) {
         organization_id: orgId,
         name,
         phone,
+        email: email || null,
         status: 'active',
         plan_type: 'monthly',
         enrollment_date: admissionDate || new Date().toISOString().split('T')[0],
@@ -160,6 +173,16 @@ export async function submitAdmissionForm(formData: FormData) {
   if (error) {
     console.error('Error submitting admission:', error);
     return { error: friendlyDbError(error.message) };
+  }
+
+  if (email) {
+    const { data: org } = await adminSupabase.from('organizations').select('name').eq('id', orgId).maybeSingle();
+    sendAdmissionEmail({
+      memberEmail: email,
+      memberName: name,
+      gymName: org?.name || 'the gym',
+      phone,
+    }).catch((err) => console.error('admission email failed:', err));
   }
 
   revalidatePath('/dashboard/members');

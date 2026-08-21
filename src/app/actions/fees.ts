@@ -5,6 +5,7 @@ import { createPrivilegedClient } from '@/utils/supabase/admin';
 import { resolveOrgId } from '@/utils/supabase/org';
 import { revalidatePath } from 'next/cache';
 import { sendMemberReminder, sendOwnerSummary } from '@/utils/whatsapp';
+import { sendMembershipExpiryEmail } from '@/utils/email';
 
 async function requireOrg() {
   const supabase = await createClient();
@@ -214,6 +215,20 @@ export async function addInvoice(formData: FormData) {
     return { error: error.message };
   }
 
+  const [{ data: member }, { data: org }] = await Promise.all([
+    adminSupabase.from('members').select('name, email').eq('id', member_id).maybeSingle(),
+    adminSupabase.from('organizations').select('name').eq('id', orgId).maybeSingle(),
+  ]);
+  if (member?.email && member.name) {
+    sendMembershipExpiryEmail({
+      memberEmail: member.email,
+      memberName: member.name,
+      gymName: org?.name || 'the gym',
+      dueDate: due_date,
+      amount: Number(plan.amount),
+    }).catch((err) => console.error('fee due email failed:', err));
+  }
+
   revalidatePath('/dashboard/fees');
   revalidatePath('/dashboard/fees/invoices');
   return { success: true };
@@ -245,11 +260,38 @@ export async function addPayment(formData: FormData) {
   const payment_mode = String(formData.get('payment_mode'));
   const receipt_no = formData.get('receipt_no') ? String(formData.get('receipt_no')) : null;
   const notes = formData.get('notes') ? String(formData.get('notes')) : null;
+  const due_date = String(formData.get('due_date') ?? '').trim();
+
+  if (!due_date) return { error: 'Due date is required.' };
+
+  let resolvedInvoiceId = invoice_id;
+
+  if (resolvedInvoiceId) {
+    await adminSupabase.from('invoices').update({ due_date }).eq('id', resolvedInvoiceId).eq('organization_id', orgId);
+  } else {
+    const { data: created, error: invoiceError } = await adminSupabase
+      .from('invoices')
+      .insert({
+        organization_id: orgId,
+        member_id,
+        amount,
+        due_date,
+        status: 'pending',
+      })
+      .select('id')
+      .single();
+
+    if (invoiceError || !created) {
+      console.error('Error creating invoice for payment:', invoiceError);
+      return { error: invoiceError?.message || 'Could not save due date.' };
+    }
+    resolvedInvoiceId = created.id;
+  }
 
   const { error } = await adminSupabase.from('payments').insert({
     organization_id: orgId,
     member_id,
-    invoice_id,
+    invoice_id: resolvedInvoiceId,
     amount,
     payment_mode,
     receipt_no,
@@ -262,11 +304,11 @@ export async function addPayment(formData: FormData) {
     return { error: error.message };
   }
 
-  if (invoice_id) {
-    const { data: inv } = await adminSupabase.from('invoices').select('amount').eq('id', invoice_id).single();
+  if (resolvedInvoiceId) {
+    const { data: inv } = await adminSupabase.from('invoices').select('amount').eq('id', resolvedInvoiceId).single();
     if (inv) {
-      const newStatus = amount >= inv.amount ? 'paid' : 'partial';
-      await adminSupabase.from('invoices').update({ status: newStatus }).eq('id', invoice_id);
+      const newStatus = amount >= Number(inv.amount) ? 'paid' : 'partial';
+      await adminSupabase.from('invoices').update({ status: newStatus }).eq('id', resolvedInvoiceId);
     }
   }
 
@@ -376,7 +418,8 @@ export async function triggerFeeReminders() {
       members (
         id,
         name,
-        phone
+        phone,
+        email
       )
     `)
     .eq('organization_id', orgId)
@@ -392,14 +435,27 @@ export async function triggerFeeReminders() {
   let totalAmount = 0;
 
   for (const invoice of invoices) {
-    const member = invoice.members as { id?: string; name?: string; phone?: string } | null;
-    if (!member?.phone || !member.name) continue;
+    const member = invoice.members as { id?: string; name?: string; phone?: string; email?: string } | null;
+    if (!member?.name) continue;
 
     if (invoice.status === 'pending' && invoice.due_date < today) {
       await supabase.from('invoices').update({ status: 'overdue' }).eq('id', invoice.id);
     }
 
-    await sendMemberReminder(member.phone, member.name, org?.name || 'Gym', invoice.amount, invoice.due_date);
+    if (member.email) {
+      await sendMembershipExpiryEmail({
+        memberEmail: member.email,
+        memberName: member.name,
+        gymName: org?.name || 'the gym',
+        dueDate: invoice.due_date,
+        amount: Number(invoice.amount),
+      });
+    }
+
+    if (member.phone) {
+      await sendMemberReminder(member.phone, member.name, org?.name || 'Gym', invoice.amount, invoice.due_date);
+    }
+
     sent += 1;
     totalAmount += Number(invoice.amount);
   }

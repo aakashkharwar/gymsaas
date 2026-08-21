@@ -47,8 +47,11 @@ export default function SignupPage() {
     const successMessage = normalizeMessage(state.success);
     if (successMessage) {
       toast.success(successMessage);
+      if (state.emailWarning) {
+        toast.warning(state.emailWarning, { duration: 8000 });
+      }
       const href = state.redirectTo || '/onboarding';
-      const timeout = setTimeout(() => router.push(href), 1200);
+      const timeout = setTimeout(() => router.push(href), state.emailWarning ? 2500 : 1200);
       return () => clearTimeout(timeout);
     }
   }, [state, router]);

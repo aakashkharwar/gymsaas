@@ -62,6 +62,24 @@ export default async function DashboardPage() {
           </div>
         </div>
       </div>
+
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-8">
+        <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Expiring in 3 days</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">Members whose unpaid membership invoice is due within the next 3 days.</p>
+        {(stats.expiring ?? []).length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">Nobody is expiring in the next 3 days.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {(stats.expiring ?? []).map((item) => (
+              <div key={item.id} className="rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/70 dark:bg-amber-950/20 p-4">
+                <p className="font-semibold text-slate-900 dark:text-white">{item.name}</p>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Due {item.dueDate} · ₹{item.amount.toLocaleString('en-IN')}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{[item.phone, item.email].filter(Boolean).join(' · ') || 'No contact saved'}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

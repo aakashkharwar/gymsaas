@@ -3,10 +3,12 @@
 import { createClient } from '@/utils/supabase/server';
 import { createPrivilegedClient } from '@/utils/supabase/admin';
 import { getSiteUrl, getSupabaseConfigOrNull } from '@/utils/supabase/config';
+import { describeEmailFailure, emailIsDelivered, sendOwnerWelcomeEmail } from '@/utils/email';
 
 export type AuthState = {
   error?: string;
   success?: string;
+  emailWarning?: string;
   redirectTo?: string;
 };
 
@@ -31,13 +33,22 @@ export async function login(prevState: AuthState | null, formData: FormData): Pr
     }
 
     const supabase = await createClient();
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password
     });
 
     if (error) {
       return { error: error.message };
+    }
+
+    const user = data.user;
+    if (user && !user.user_metadata?.welcome_email_sent) {
+      const ownerName = String(user.user_metadata?.full_name || '').trim();
+      const emailResult = await sendOwnerWelcomeEmail(email, ownerName);
+      if (emailIsDelivered(emailResult)) {
+        await supabase.auth.updateUser({ data: { welcome_email_sent: true } }).catch(() => {});
+      }
     }
 
     return { success: 'Logged in successfully.' };
@@ -61,7 +72,7 @@ export async function requestPasswordReset(_prevState: AuthState | null, formDat
 
     const supabase = await createClient();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${getSiteUrl()}/reset-password`,
+      redirectTo: `${getSiteUrl()}/auth/callback?next=/reset-password`,
     });
 
     if (error) {
@@ -103,6 +114,7 @@ export async function signup(prevState: AuthState | null, formData: FormData): P
         data: {
           full_name: ownerName,
           phone: ownerPhone,
+          gym_name: gymName,
         }
       }
     });
@@ -157,15 +169,51 @@ export async function signup(prevState: AuthState | null, formData: FormData): P
       console.error('Default fee plan creation failed:', feePlanError);
     }
 
+    const emailResult = await sendOwnerWelcomeEmail(email, ownerName, gymName);
+    let sent = emailIsDelivered(emailResult);
+    let emailWarning = sent ? null : describeEmailFailure(emailResult);
+
+    if (!sent) {
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: false,
+          emailRedirectTo: `${getSiteUrl()}/auth/callback?next=/dashboard`,
+          data: {
+            full_name: ownerName,
+            gym_name: gymName,
+          },
+        },
+      });
+
+      if (otpError) {
+        console.error('Supabase welcome email failed:', otpError);
+        emailWarning = otpError.message;
+      } else {
+        sent = true;
+        emailWarning = null;
+      }
+    }
+
+    if (sent && authData.session) {
+      await supabase.auth.updateUser({
+        data: { welcome_email_sent: true, full_name: ownerName, phone: ownerPhone, gym_name: gymName },
+      }).catch(() => {});
+    }
+
     if (!authData.session) {
       return {
         success: 'Account created. Check your email to confirm, then log in.',
+        emailWarning: emailWarning ?? undefined,
         redirectTo: '/login',
       };
     }
 
     return {
-      success: 'Account created successfully. Redirecting you to onboarding...',
+      success: sent
+        ? `Account created. A welcome email was sent to ${email}.`
+        : 'Account created successfully. Redirecting you to onboarding...',
+      emailWarning: emailWarning ?? undefined,
       redirectTo: '/onboarding',
     };
   } catch (err) {
