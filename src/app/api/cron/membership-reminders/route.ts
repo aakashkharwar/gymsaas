@@ -60,7 +60,7 @@ export async function GET(req: Request) {
           memberEmail: member.email,
           memberName: member.name,
           gymName,
-          dueDate: invoice.due_date,
+          dueDate: String(invoice.due_date ?? ''),
           amount: Number(invoice.amount),
         })
         emailed += 1
@@ -70,14 +70,14 @@ export async function GET(req: Request) {
         const current = byOwner.get(org.owner_email) || {
           gymName,
           ownerEmail: org.owner_email,
-          members: [],
+          members: [] as Array<{ name: string; dueDate: string; amount?: number; email?: string; phone?: string }>,
         }
         current.members.push({
-          name: member?.name || 'Unknown member',
-          dueDate: invoice.due_date,
+          name: member?.name ?? 'Unknown member',
+          dueDate: String(invoice.due_date ?? ''),
           amount: Number(invoice.amount),
-          email: member?.email,
-          phone: member?.phone,
+          email: member?.email ?? undefined,
+          phone: member?.phone ?? undefined,
         })
         byOwner.set(org.owner_email, current)
       }
