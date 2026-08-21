@@ -1,47 +1,32 @@
+'use client';
+
+import { useQuery } from '@tanstack/react-query';
 import { getExpenses } from '@/app/actions/expenses';
+import { getDashboardStats } from '@/app/actions/dashboard';
 import { Receipt } from 'lucide-react';
 import LogExpenseModal from './LogExpenseModal';
-import { createClient } from '@/utils/supabase/server';
+import { queryKeys } from '@/lib/query-keys';
 
-export default async function ExpensesPage() {
-  const expenses = await getExpenses();
+export default function ExpensesPage() {
+  const { data: expenses = [] } = useQuery({
+    queryKey: queryKeys.expenses,
+    queryFn: getExpenses,
+  });
+  const { data: stats } = useQuery({
+    queryKey: queryKeys.dashboard,
+    queryFn: getDashboardStats,
+  });
 
-  // Basic calculation for the current month
   const currentMonth = new Date().getMonth();
   const currentYear = new Date().getFullYear();
   
-  const thisMonthExpenses = expenses.filter((e: any) => {
+  const thisMonthExpenses = expenses.filter((e: { expense_date: string; amount: number }) => {
     const d = new Date(e.expense_date);
     return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
   });
 
-  const totalExpenseThisMonth = thisMonthExpenses.reduce((sum: number, e: any) => sum + Number(e.amount), 0);
-
-  // Fetch real revenue from payments table
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  let totalRevenueThisMonth = 0;
-  if (user) {
-    const { data: admin } = await supabase.from('admin_users').select('organization_id').eq('id', user.id).single();
-    if (admin?.organization_id) {
-      // Start and end of current month
-      const startOfMonth = new Date(currentYear, currentMonth, 1).toISOString();
-      const endOfMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59).toISOString();
-      
-      const { data: payments } = await supabase
-        .from('payments')
-        .select('amount')
-        .eq('organization_id', admin.organization_id)
-        .gte('paid_at', startOfMonth)
-        .lte('paid_at', endOfMonth);
-        
-      if (payments) {
-        totalRevenueThisMonth = payments.reduce((sum, p) => sum + Number(p.amount), 0);
-      }
-    }
-  }
-
+  const totalExpenseThisMonth = thisMonthExpenses.reduce((sum: number, e: { amount: number }) => sum + Number(e.amount), 0);
+  const totalRevenueThisMonth = stats?.totalRevenue || 0;
   const netProfit = totalRevenueThisMonth - totalExpenseThisMonth;
 
   return (
@@ -86,8 +71,8 @@ export default async function ExpensesPage() {
                 </tr>
               </thead>
               <tbody className="text-sm divide-y divide-slate-100 dark:divide-slate-800/50">
-                {expenses.map((e: any) => (
-                  <tr key={e.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                {expenses.map((e: { id: string; expense_date: string; category: string; notes?: string; amount: number }) => (
+                  <tr key={e.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                     <td className="px-5 py-4 text-slate-600 dark:text-slate-400">{new Date(e.expense_date).toLocaleDateString()}</td>
                     <td className="px-5 py-4 font-medium text-slate-900 dark:text-slate-200 capitalize">{e.category}</td>
                     <td className="px-5 py-4 text-slate-500 dark:text-slate-400">{e.notes || '-'}</td>
@@ -103,7 +88,7 @@ export default async function ExpensesPage() {
               <Receipt className="w-6 h-6 text-slate-400 dark:text-slate-500" />
             </div>
             <p className="text-slate-900 dark:text-slate-200 font-medium">No expenses yet</p>
-            <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">When you log expenses, they'll appear here.</p>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">When you log expenses, they will appear here.</p>
           </div>
         )}
       </div>

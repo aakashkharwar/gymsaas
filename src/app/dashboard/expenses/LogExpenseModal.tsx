@@ -3,10 +3,13 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Plus } from 'lucide-react';
 import { addExpense } from '@/app/actions/expenses';
+import { queryKeys } from '@/lib/query-keys';
 
 export default function LogExpenseModal() {
+  const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -21,6 +24,8 @@ export default function LogExpenseModal() {
       toast.error(res.error);
     } else {
       setIsOpen(false);
+      queryClient.invalidateQueries({ queryKey: queryKeys.expenses });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
     }
   };
 

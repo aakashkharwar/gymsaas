@@ -2,11 +2,18 @@
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Plus, CreditCard, AlertTriangle, X, Pencil, Trash2 } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { addFeePlan, deleteFeePlan, getFeePlans } from '@/app/actions/fees';
+import { queryKeys } from '@/lib/query-keys';
 
 export default function FeePlansPage() {
-  const [plans, setPlans] = useState<any[]>([]);
+  const queryClient = useQueryClient();
+  const { data: plans = [] } = useQuery({
+    queryKey: queryKeys.feePlans,
+    queryFn: getFeePlans,
+  });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editPlanId, setEditPlanId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -16,22 +23,10 @@ export default function FeePlansPage() {
     description: '',
   });
 
-  useEffect(() => {
-    let mounted = true;
-    import('@/app/actions/fees').then(async (m) => {
-      const list = await m.getFeePlans();
-      if (mounted) setPlans(list);
-    });
-    return () => { mounted = false; };
-  }, []);
-
-  
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this fee plan?')) return;
-    const m = await import('@/app/actions/fees');
-    await m.deleteFeePlan(id);
-    const updated = await m.getFeePlans();
-    setPlans(updated);
+    await deleteFeePlan(id);
+    queryClient.invalidateQueries({ queryKey: queryKeys.feePlans });
   };
 
   const openEditModal = (plan: any) => {
@@ -68,17 +63,13 @@ export default function FeePlansPage() {
     }
 
     setIsSubmitting(true);
-    const m = await import('@/app/actions/fees');
     const fd = new FormData();
     fd.append('name', formData.name);
     fd.append('amount', formData.amount);
     fd.append('duration_months', formData.duration_months);
 
-    await m.addFeePlan(fd);
-    
-    // Refresh plans
-    const updated = await m.getFeePlans();
-    setPlans(updated);
+    await addFeePlan(fd);
+    queryClient.invalidateQueries({ queryKey: queryKeys.feePlans });
     
     setIsSubmitting(false);
     setIsModalOpen(false);

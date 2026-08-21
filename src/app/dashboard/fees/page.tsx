@@ -1,12 +1,23 @@
-import { IndianRupee, AlertTriangle, FileText, ArrowUpRight, CheckCircle, Clock } from 'lucide-react';
-import Link from 'next/link';
-import { getFeeDashboardStats, getFees } from '@/app/actions/fees';
+'use client';
 
-export default async function FeesDashboard() {
-  const metrics = await getFeeDashboardStats();
-  // Fetch recent payments and take top 5
-  const allFees = await getFees();
-  const recentPayments = allFees ? allFees.slice(0, 5) : [];
+import { IndianRupee, AlertTriangle, FileText, ArrowUpRight, Clock } from 'lucide-react';
+import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
+import { getFeeDashboardStats, getFees } from '@/app/actions/fees';
+import { queryKeys } from '@/lib/query-keys';
+
+const emptyMetrics = { totalCollectedToday: 0, totalCollectedMonth: 0, totalPendingDues: 0, overdueCount: 0 };
+
+export default function FeesDashboard() {
+  const { data: metrics = emptyMetrics } = useQuery({
+    queryKey: queryKeys.feeStats,
+    queryFn: getFeeDashboardStats,
+  });
+  const { data: allFees = [] } = useQuery({
+    queryKey: queryKeys.fees,
+    queryFn: getFees,
+  });
+  const recentPayments = allFees.slice(0, 5);
 
   return (
     <div className="mx-auto max-w-7xl space-y-8">

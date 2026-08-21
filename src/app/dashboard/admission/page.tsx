@@ -5,8 +5,11 @@ import { Button } from '@/components/ui/button';
 import { useState, useEffect } from 'react';
 import { submitAdmissionForm } from '@/app/actions/members';
 import { ChevronDown } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query-keys';
 
 export default function AdmissionPage() {
+  const queryClient = useQueryClient();
   const [gymName, setGymName] = useState('GYM NAME');
   const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -81,6 +84,8 @@ export default function AdmissionPage() {
       setErrors({ form: result.error });
     } else {
       toast.success('Admission successfully recorded!');
+      queryClient.invalidateQueries({ queryKey: queryKeys.members });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
       (e.target as HTMLFormElement).reset();
       setSex('');
       setDob('');

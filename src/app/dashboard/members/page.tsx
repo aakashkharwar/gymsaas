@@ -3,9 +3,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 
 import {
-  AlertTriangle,
   CalendarRange,
-  ChevronDown,
   CircleDashed,
   CreditCard,
   Mail,
@@ -17,6 +15,10 @@ import {
 } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
 import CustomDropdown from '@/components/CustomDropdown';
+import { addMember, getMembers, updateMember } from '@/app/actions/members';
+import { getFeePlans } from '@/app/actions/fees';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query-keys';
 
 type MemberStatus = 'active' | 'inactive' | 'suspended';
 type PlanType = 'monthly' | 'quarterly' | 'annual';
@@ -26,13 +28,28 @@ type Member = {
   name: string;
   phone: string;
   email: string;
-  address: string;
+  address?: string;
   fee_plan_id: string;
-  plan_type?: PlanType; // keeping for backward compatibility if needed
+  plan_type?: PlanType;
   status: MemberStatus;
   enrollment_date: string;
   notes?: string;
+  created_at?: string;
 };
+
+function addressFromMember(member: Pick<Member, 'address' | 'notes'>) {
+  if (member.address) return member.address;
+  const match = member.notes?.match(/^Address:\s*(.+)$/m);
+  return match?.[1]?.trim() || '';
+}
+
+function isNewMember(member: Pick<Member, 'notes' | 'created_at' | 'enrollment_date'>) {
+  const notes = member.notes || '';
+  if (notes.includes('[NEW ADMISSION]') || notes.includes('[NEW MEMBER]')) return true;
+  const stamp = member.created_at || member.enrollment_date;
+  if (!stamp) return false;
+  return Date.now() - new Date(stamp).getTime() < 30 * 24 * 60 * 60 * 1000;
+}
 
 const statusOptions: Array<{ value: MemberStatus; label: string; accent: string; dot: string }> = [
   { value: 'active', label: 'Active', accent: 'text-blue-600', dot: 'bg-blue-500' },
@@ -40,11 +57,16 @@ const statusOptions: Array<{ value: MemberStatus; label: string; accent: string;
   { value: 'suspended', label: 'Suspended', accent: 'text-amber-600', dot: 'bg-amber-500' },
 ];
 
-const initialMembers: Member[] = [];
-
 export default function MembersPage() {
-  const [members, setMembers] = useState<Member[]>(initialMembers);
-  const [feePlans, setFeePlans] = useState<any[]>([]);
+  const queryClient = useQueryClient();
+  const { data: members = [] } = useQuery({
+    queryKey: queryKeys.members,
+    queryFn: () => getMembers() as Promise<Member[]>,
+  });
+  const { data: feePlans = [] } = useQuery({
+    queryKey: queryKeys.feePlans,
+    queryFn: getFeePlans,
+  });
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -61,29 +83,12 @@ export default function MembersPage() {
     notes: '',
   });
 
-  // load members and fee plans
   useEffect(() => {
-    let mounted = true;
-    Promise.all([
-      import('@/app/actions/members').then(m => m.getMembers()),
-      import('@/app/actions/fees').then(m => m.getFeePlans ? m.getFeePlans() : import('@/utils/fee-store').then(s => s.getFeePlans()))
-    ]).then(([memberList, planList]) => {
-      if (mounted) {
-        if (Array.isArray(memberList)) {
-          setMembers(memberList as any[]);
-          import('@/utils/storage').then((s) => s.saveMembers(
-            (memberList as any[]).map((mem) => ({ ...mem, qrCode: mem.phone, username: mem.phone }))
-          )).catch(() => {});
-        }
-        if (Array.isArray(planList)) setFeePlans(planList);
-      }
-    }).catch(() => {
-      // ignore
-    });
-    return () => {
-      mounted = false;
-    };
-  }, []);
+    if (!members.length) return;
+    import('@/utils/storage').then((s) => s.saveMembers(
+      members.map((mem) => ({ ...mem, qrCode: mem.phone, username: mem.phone }))
+    )).catch(() => {});
+  }, [members]);
 
   const filteredMembers = useMemo(() => {
     const query = search.toLowerCase();
@@ -155,7 +160,6 @@ export default function MembersPage() {
 
     setIsSubmitting(true);
     try {
-      const { addMember, updateMember } = await import('@/app/actions/members');
       const fd = new FormData();
       fd.append('name', formData.name.trim());
       fd.append('phone', formData.phone.trim());
@@ -178,25 +182,25 @@ export default function MembersPage() {
         return;
       }
 
-      // Optimistically update the UI immediately so the user sees changes instantly
       if (editingMemberId) {
-        setMembers((prev) => prev.map((m) => m.id === editingMemberId ? {
-          ...m,
-          name: formData.name.trim(),
-          phone: formData.phone.trim(),
-          email: formData.email.trim(),
-          address: formData.address.trim(),
-          fee_plan_id: formData.fee_plan_id,
-          status: formData.status as MemberStatus,
-          enrollment_date: formData.enrollment_date,
-          notes: formData.notes.trim()
-        } : m));
+        queryClient.setQueryData(queryKeys.members, (prev: Member[] | undefined) =>
+          (prev || []).map((m) => m.id === editingMemberId ? {
+            ...m,
+            name: formData.name.trim(),
+            phone: formData.phone.trim(),
+            email: formData.email.trim(),
+            address: formData.address.trim(),
+            fee_plan_id: formData.fee_plan_id,
+            status: formData.status as MemberStatus,
+            enrollment_date: formData.enrollment_date,
+            notes: formData.notes.trim()
+          } : m)
+        );
+      } else if ('member' in result && result.member) {
+        queryClient.setQueryData(queryKeys.members, (prev: Member[] | undefined) =>
+          [result.member as Member, ...(prev || [])]
+        );
       }
-
-      // Fetch fresh data from server in the background
-      const { getMembers } = await import('@/app/actions/members');
-      const updatedMembers = await getMembers();
-      setMembers(updatedMembers as any[]);
 
       setFormData({
         name: '',
@@ -211,7 +215,9 @@ export default function MembersPage() {
       setErrors({});
       setEditingMemberId(null);
       toast.success(editingMemberId ? 'Member updated successfully!' : 'Member added successfully!');
-        setIsModalOpen(false);
+      setIsModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: queryKeys.members });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
       } catch (err) {
       console.error(err);
       toast.error('Failed to add member'); setErrors({ submit: 'Failed to add member' });
@@ -225,7 +231,7 @@ export default function MembersPage() {
       name: member.name || '',
       phone: member.phone || '',
       email: member.email || '',
-      address: member.address || '',
+      address: addressFromMember(member),
       fee_plan_id: member.fee_plan_id || '',
       status: member.status || 'active',
       enrollment_date: member.enrollment_date ? new Date(member.enrollment_date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
@@ -317,17 +323,28 @@ export default function MembersPage() {
                       {feePlans.find(p => p.id === member.fee_plan_id)?.name || member.plan_type || 'No plan'}
                     </p>
                   </div>
-                  <span
-                    className={`shrink-0 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                      member.status === 'active'
-                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
-                        : member.status === 'inactive'
-                          ? 'bg-slate-100 text-slate-700 dark:bg-slate-500/10 dark:text-slate-400'
-                          : 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
-                    }`}
-                  >
-                    {member.status}
-                  </span>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        isNewMember(member)
+                          ? 'bg-green-100 text-green-800 dark:bg-green-500/10 dark:text-green-400'
+                          : 'bg-slate-100 text-slate-700 dark:bg-slate-500/10 dark:text-slate-400'
+                      }`}
+                    >
+                      {isNewMember(member) ? 'New' : 'Existing'}
+                    </span>
+                    <span
+                      className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                        member.status === 'active'
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
+                          : member.status === 'inactive'
+                            ? 'bg-slate-100 text-slate-700 dark:bg-slate-500/10 dark:text-slate-400'
+                            : 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
+                      }`}
+                    >
+                      {member.status}
+                    </span>
+                  </div>
                 </div>
                 <Button
                   type="button"
@@ -359,7 +376,7 @@ export default function MembersPage() {
                     <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-200">{member.name}</td>
                     <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{member.phone}</td>
                     <td className="px-6 py-4">
-                      {member.notes?.includes('[NEW ADMISSION]') ? (
+                      {isNewMember(member) ? (
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-500/10 dark:text-green-400">
                           New
                         </span>
@@ -406,11 +423,11 @@ export default function MembersPage() {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 dark:bg-slate-950/80 p-4 backdrop-blur-sm transition-all">
-          <div className="w-full max-w-2xl max-h-[calc(100vh-2rem)] overflow-y-auto rounded-3xl bg-white dark:bg-slate-900 p-5 sm:p-8 shadow-2xl border border-slate-100 dark:border-slate-800">
-            <div className="mb-8 flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-slate-900/50 dark:bg-slate-950/80 sm:p-4">
+          <div className="flex h-[100dvh] w-full max-w-2xl flex-col overflow-hidden bg-white dark:bg-slate-900 sm:h-auto sm:max-h-[min(90vh,calc(100dvh-2rem))] sm:rounded-3xl border-0 sm:border border-slate-100 dark:border-slate-800">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 px-5 py-4 sm:px-8 sm:py-5 shrink-0">
+              <div className="min-w-0">
+                <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
                   {editingMemberId ? 'Edit member' : 'Add member'}
                 </h2>
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
@@ -419,19 +436,21 @@ export default function MembersPage() {
               </div>
               <Button
                 type="button"
+                variant="ghost"
+                size="icon"
                 onClick={() => {
                   setIsModalOpen(false);
                   setErrors({});
                   setEditingMemberId(null);
                 }}
-                className="rounded-full p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+                className="shrink-0 rounded-full"
               >
                 <X className="h-5 w-5" />
               </Button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6" noValidate>
-              <div className="grid gap-6 md:grid-cols-2">
+            <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" noValidate>
+              <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-8 space-y-6">
                 <div className="md:col-span-2">
                   <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Member name</label>
                   <input
@@ -545,7 +564,7 @@ export default function MembersPage() {
                 </div>
               </div>
 
-              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800 pt-6 mt-8">
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800 px-5 py-4 sm:px-8 shrink-0 bg-white dark:bg-slate-900">
                 <Button
                   type="button"
                   variant="outline"

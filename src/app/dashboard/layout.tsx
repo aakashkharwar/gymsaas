@@ -4,16 +4,58 @@ import { Button } from '@/components/ui/button';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { motion } from 'motion/react';
+import dynamic from 'next/dynamic';
 import { Home, Users, CheckSquare, CreditCard, Receipt, Settings, Menu, X, Clipboard } from 'lucide-react';
+import { QueryProvider } from '@/components/QueryProvider';
+import { useQueryClient } from '@tanstack/react-query';
+import { prefetchDashboardRoute } from '@/lib/prefetch-dashboard';
 import ThemeToggle from '../../components/ThemeToggle';
-import OwnerCopilot from '@/components/OwnerCopilot';
+
+const OwnerCopilot = dynamic(() => import('@/components/OwnerCopilot'), { ssr: false });
+
+function NavProgress() {
+  const pathname = usePathname();
+  const [active, setActive] = useState(false);
+
+  useEffect(() => {
+    setActive(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      const link = (event.target as HTMLElement | null)?.closest('a[href]') as HTMLAnchorElement | null;
+      if (!link) return;
+      const href = link.getAttribute('href');
+      if (!href || href.startsWith('#') || href.startsWith('http') || href === pathname) return;
+      if (link.target === '_blank') return;
+      setActive(true);
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
+  }, [pathname]);
+
+  if (!active) return null;
+  return (
+    <div className="pointer-events-none fixed top-0 left-0 right-0 z-[120] h-0.5 overflow-hidden bg-indigo-200/40 dark:bg-indigo-950">
+      <div className="h-full w-1/2 animate-pulse bg-indigo-500" />
+    </div>
+  );
+}
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  return (
+    <QueryProvider>
+      <DashboardShell>{children}</DashboardShell>
+    </QueryProvider>
+  );
+}
+
+function DashboardShell({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const pathname = usePathname();
 
@@ -23,6 +65,12 @@ export default function DashboardLayout({
   // Register offline cache so attendance scanner still works without network
   useEffect(() => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+    if (process.env.NODE_ENV !== 'production') {
+      navigator.serviceWorker.getRegistrations().then((regs) => {
+        regs.forEach((reg) => reg.unregister());
+      }).catch(() => {});
+      return;
+    }
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   }, []);
   useEffect(() => {
@@ -84,7 +132,8 @@ export default function DashboardLayout({
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50/80 dark:bg-slate-950/80 flex transition-colors duration-300">
+    <div className="min-h-screen bg-slate-50/80 dark:bg-slate-950/80 flex">
+      <NavProgress />
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div 
@@ -113,33 +162,22 @@ export default function DashboardLayout({
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch
+                onMouseEnter={() => prefetchDashboardRoute(queryClient, item.href)}
+                onFocus={() => prefetchDashboardRoute(queryClient, item.href)}
                 onClick={closeMobileMenu}
-                className={`relative flex items-center px-3 py-2.5 text-sm font-medium rounded-lg group transition-colors ${item.active ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 hover:text-slate-900 dark:hover:text-white'}`}
+                className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-lg group ${item.active ? 'bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 hover:text-slate-900 dark:hover:text-white'}`}
               >
-                {item.active && (
-                  <motion.span
-                    layoutId="nav-active"
-                    className="absolute inset-0 rounded-lg bg-slate-100 dark:bg-slate-800"
-                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                  />
-                )}
-                <Icon className={`relative mr-3 h-5 w-5 transition-colors ${item.active ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 group-hover:text-slate-500 dark:group-hover:text-slate-300'}`} />
-                <span className="relative">{item.label}</span>
+                <Icon className={`mr-3 h-5 w-5 ${item.active ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 group-hover:text-slate-500 dark:group-hover:text-slate-300'}`} />
+                <span>{item.label}</span>
               </Link>
             );
           })}
         </nav>
         <div className="p-4 border-t border-slate-200 dark:border-slate-800">
-          <Link href="/dashboard/settings" onClick={closeMobileMenu} className={`relative flex items-center px-3 py-2.5 text-sm font-medium rounded-lg group transition-colors ${pathname.includes('/settings') ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white'}`}>
-            {pathname.includes('/settings') && (
-              <motion.span
-                layoutId="nav-active"
-                className="absolute inset-0 rounded-lg bg-slate-100 dark:bg-slate-800"
-                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-              />
-            )}
-            <Settings className={`relative mr-3 h-5 w-5 transition-colors ${pathname.includes('/settings') ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 group-hover:text-slate-500 dark:group-hover:text-slate-300'}`} />
-            <span className="relative">Settings</span>
+          <Link href="/dashboard/settings" onClick={closeMobileMenu} className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-lg group ${pathname.includes('/settings') ? 'bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white'}`}>
+            <Settings className={`mr-3 h-5 w-5 ${pathname.includes('/settings') ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 group-hover:text-slate-500 dark:group-hover:text-slate-300'}`} />
+            <span>Settings</span>
           </Link>
         </div>
       </aside>

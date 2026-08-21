@@ -4,7 +4,6 @@ import { createClient } from '@/utils/supabase/server';
 import { createPrivilegedClient } from '@/utils/supabase/admin';
 import { friendlyDbError, resolveOrgId } from '@/utils/supabase/org';
 import { sendAdmissionEmail } from '@/utils/email';
-import { revalidatePath } from 'next/cache';
 
 export async function getMembers() {
   const supabase = await createClient();
@@ -46,11 +45,18 @@ export async function addMember(formData: FormData) {
   const fee_plan_id = formData.get('fee_plan_id') as string;
   const status = formData.get('status') as string;
   const enrollment_date = formData.get('enrollment_date') as string;
-  const notes = formData.get('notes') as string;
-  const plan_type = formData.get('plan_type') as string;
+  const notesRaw = (formData.get('notes') as string) || ''
+  const address = ((formData.get('address') as string) || '').trim()
+  const tagged = notesRaw.includes('[NEW MEMBER]') || notesRaw.includes('[NEW ADMISSION]')
+    ? notesRaw
+    : `[NEW MEMBER]\n${notesRaw}`.trim()
+  const notes = address && !tagged.includes(`Address: ${address}`)
+    ? `${tagged}\nAddress: ${address}`.trim()
+    : tagged
+  const plan_type = formData.get('plan_type') as string
 
   const adminSupabase = await createPrivilegedClient();
-  const { error } = await adminSupabase.from('members').insert([
+  const { data, error } = await adminSupabase.from('members').insert([
       {
         organization_id: orgId,
         name,
@@ -62,7 +68,7 @@ export async function addMember(formData: FormData) {
         notes: notes || null,
         plan_type,
       }
-    ]);
+    ]).select('*').single();
 
   if (error) {
     return { error: friendlyDbError(error.message) };
@@ -78,8 +84,7 @@ export async function addMember(formData: FormData) {
     }).catch((err) => console.error('member welcome email failed:', err));
   }
 
-  revalidatePath('/dashboard/members');
-  return { success: true };
+  return { success: true, member: data };
 }
 
 export async function updateMember(id: string, formData: FormData) {
@@ -94,7 +99,11 @@ export async function updateMember(id: string, formData: FormData) {
   const fee_plan_id = formData.get('fee_plan_id') as string;
   const status = formData.get('status') as string;
   const enrollment_date = formData.get('enrollment_date') as string;
-  const notes = formData.get('notes') as string;
+  const notesRaw = (formData.get('notes') as string) || ''
+  const address = ((formData.get('address') as string) || '').trim()
+  const notes = address && !notesRaw.includes(`Address: ${address}`)
+    ? `${notesRaw}\nAddress: ${address}`.trim()
+    : notesRaw
   const plan_type = formData.get('plan_type') as string;
 
   const { error } = await supabase
@@ -115,7 +124,6 @@ export async function updateMember(id: string, formData: FormData) {
     return { error: friendlyDbError(error.message) };
   }
 
-  revalidatePath('/dashboard/members');
   return { success: true };
 }
 
@@ -185,6 +193,5 @@ export async function submitAdmissionForm(formData: FormData) {
     }).catch((err) => console.error('admission email failed:', err));
   }
 
-  revalidatePath('/dashboard/members');
   return { success: true };
 }
