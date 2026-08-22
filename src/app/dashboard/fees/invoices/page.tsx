@@ -13,6 +13,24 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { useSave } from '@/components/SaveProvider';
 import { SavingButton } from '@/components/SavingButton';
+import { invoiceDisplayStatus } from '@/lib/membership-access';
+
+function statusBadge(status: string, dueDate: string, today: string) {
+  const display = invoiceDisplayStatus(status, dueDate, today);
+  if (display === 'paid') {
+    return { label: 'Paid', className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' };
+  }
+  if (display === 'overdue') {
+    return { label: 'Overdue', className: 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400', icon: true };
+  }
+  if (display === 'due_today') {
+    return { label: 'Due Today', className: 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' };
+  }
+  return {
+    label: display.charAt(0).toUpperCase() + display.slice(1),
+    className: 'bg-slate-100 text-slate-700 dark:bg-slate-500/10 dark:text-slate-400',
+  };
+}
 
 export default function InvoicesPage() {
   const queryClient = useQueryClient();
@@ -77,9 +95,13 @@ export default function InvoicesPage() {
       fd.append('due_date', formData.due_date);
 
       const res = await addInvoice(fd);
-      if (res.error) {
+      if ('error' in res && res.error) {
         toast.error(res.error);
         return;
+      }
+
+      if ('invoice' in res && res.invoice) {
+        queryClient.setQueryData(queryKeys.invoices, (prev: Invoice[] | undefined) => [res.invoice as Invoice, ...(prev || [])]);
       }
 
       setIsModalOpen(false);
@@ -89,7 +111,6 @@ export default function InvoicesPage() {
         due_date: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
       });
       toast.success('Invoice generated successfully!');
-      queryClient.invalidateQueries({ queryKey: queryKeys.invoices });
     });
     setIsCreating(false);
   };
@@ -113,7 +134,11 @@ export default function InvoicesPage() {
   const filteredInvoices = invoices.filter(inv => {
     const member = members.find(m => m.id === inv.member_id);
     const matchesSearch = !search || member?.name.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || inv.status === statusFilter;
+    const display = invoiceDisplayStatus(inv.status, inv.due_date, today);
+    const matchesStatus = statusFilter === 'all'
+      || inv.status === statusFilter
+      || (statusFilter === 'overdue' && display === 'overdue')
+      || (statusFilter === 'pending' && display === 'due_today');
     return matchesSearch && matchesStatus;
   });
 
@@ -349,6 +374,7 @@ export default function InvoicesPage() {
             {paginatedInvoices.map((inv) => {
               const member = members.find(m => m.id === inv.member_id);
               const plan = feePlans.find(p => p.id === inv.fee_plan_id);
+              const badge = statusBadge(inv.status, inv.due_date, today);
               return (
                 <div key={inv.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3">
@@ -357,13 +383,8 @@ export default function InvoicesPage() {
                       <p className="text-sm text-slate-500 dark:text-slate-400">{plan?.name || 'Plan'} · ₹{inv.amount}</p>
                       <p className="text-sm text-slate-500 dark:text-slate-400">Due {inv.due_date}</p>
                     </div>
-                    <span className={`shrink-0 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
-                      inv.status === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' :
-                      inv.status === 'overdue' ? 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400' :
-                      (inv.status === 'pending' && String(inv.due_date).slice(0, 10) === today) ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' :
-                      'bg-slate-100 text-slate-700 dark:bg-slate-500/10 dark:text-slate-400'
-                    }`}>
-                      {(inv.status === 'pending' && String(inv.due_date).slice(0, 10) === today) ? 'Due Today' : (inv.status.charAt(0).toUpperCase() + inv.status.slice(1))}
+                    <span className={`shrink-0 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${badge.className}`}>
+                      {badge.label}
                     </span>
                   </div>
                   <Button variant="outline" size="sm" onClick={() => handleDownloadPdf(inv)} className="w-full">
@@ -390,6 +411,7 @@ export default function InvoicesPage() {
                 {paginatedInvoices.map((inv) => {
                   const member = members.find(m => m.id === inv.member_id);
                   const plan = feePlans.find(p => p.id === inv.fee_plan_id);
+                  const badge = statusBadge(inv.status, inv.due_date, today);
                   return (
                     <tr key={inv.id} className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                       <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-200">{member?.name || 'Unknown'}</td>
@@ -398,14 +420,9 @@ export default function InvoicesPage() {
                       <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{inv.due_date}</td>
                       <td className="px-6 py-4">
                         
-                          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-                            inv.status === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' :
-                            inv.status === 'overdue' ? 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400' :
-                            (inv.status === 'pending' && String(inv.due_date).slice(0, 10) === today) ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' :
-                            'bg-slate-100 text-slate-700 dark:bg-slate-500/10 dark:text-slate-400'
-                          }`}>
-                            {inv.status === 'overdue' && <AlertCircle className="h-3.5 w-3.5" />}
-                            {(inv.status === 'pending' && String(inv.due_date).slice(0, 10) === today) ? 'Due Today' : (inv.status.charAt(0).toUpperCase() + inv.status.slice(1))}
+                          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${badge.className}`}>
+                            {badge.icon && <AlertCircle className="h-3.5 w-3.5" />}
+                            {badge.label}
                           </span>
 
                       </td>

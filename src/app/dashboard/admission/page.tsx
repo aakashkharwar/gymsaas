@@ -88,7 +88,6 @@ export default function AdmissionPage() {
     } else {
       toast.success('Admission successfully recorded!');
       queryClient.invalidateQueries({ queryKey: queryKeys.members });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
       (e.target as HTMLFormElement).reset();
       setSex('');
       setDob('');

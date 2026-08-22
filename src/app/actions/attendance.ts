@@ -3,7 +3,7 @@
 import { createClient } from '@/utils/supabase/server';
 import { createPrivilegedClient } from '@/utils/supabase/admin';
 import { resolveOrgId } from '@/utils/supabase/org';
-import { hasUnpaidDueInvoice, MEMBERSHIP_EXPIRED_MESSAGE } from '@/lib/membership-access';
+import { MEMBERSHIP_EXPIRED_MESSAGE, membershipExpired } from '@/lib/membership-access';
 
 function memberFromJoin(raw: unknown) {
   const member = Array.isArray(raw) ? raw[0] : raw;
@@ -165,9 +165,8 @@ export async function markAttendanceByPhone(phone: string) {
     .from('invoices')
     .select('due_date, status')
     .eq('organization_id', orgId)
-    .eq('member_id', member.id)
-    .neq('status', 'paid');
-  const membershipBlocked = hasUnpaidDueInvoice(invoices || [], today);
+    .eq('member_id', member.id);
+  const membershipBlocked = membershipExpired(invoices || [], today);
   type TodayRow = {
     id: string;
     check_in_time: string;

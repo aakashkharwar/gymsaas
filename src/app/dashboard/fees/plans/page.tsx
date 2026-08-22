@@ -3,7 +3,6 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 
 import { useState } from 'react';
-import { flushSync } from 'react-dom';
 import { Plus, CreditCard, AlertTriangle, X, Pencil, Trash2 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { addFeePlan, deleteFeePlan, getFeePlans, updateFeePlan } from '@/app/actions/fees';
@@ -66,7 +65,7 @@ export default function FeePlansPage() {
       return;
     }
 
-    flushSync(() => setIsSubmitting(true));
+    setIsSubmitting(true);
     await runSave(async () => {
       const fd = new FormData();
       fd.append('name', formData.name);
@@ -96,7 +95,6 @@ export default function FeePlansPage() {
         queryClient.setQueryData(queryKeys.feePlans, (prev: any[] | undefined) => [result.plan, ...(prev || [])]);
       }
 
-      queryClient.invalidateQueries({ queryKey: queryKeys.feePlans });
       toast.success(editPlanId ? 'Plan updated' : 'Plan saved');
       setIsSubmitting(false);
       setIsModalOpen(false);

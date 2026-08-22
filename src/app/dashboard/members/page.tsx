@@ -221,8 +221,6 @@ export default function MembersPage() {
       setEditingMemberId(null);
       toast.success(editingMemberId ? 'Member updated successfully!' : 'Member added successfully!');
       setIsModalOpen(false);
-      queryClient.invalidateQueries({ queryKey: queryKeys.members });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
       } catch (err) {
       console.error(err);
       toast.error('Failed to add member'); setErrors({ submit: 'Failed to add member' });

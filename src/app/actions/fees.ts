@@ -5,7 +5,7 @@ import { createPrivilegedClient } from '@/utils/supabase/admin';
 import { resolveOrgId } from '@/utils/supabase/org';
 import { sendMemberReminder, sendOwnerSummary } from '@/utils/whatsapp';
 import { sendMembershipExpiryEmail } from '@/utils/email';
-import { dateOnly, invoiceDueOnOrBefore, istToday } from '@/lib/membership-access';
+import { dateOnly, invoiceDueOnOrBefore, istToday, nextInvoiceDueDate } from '@/lib/membership-access';
 
 async function requireOrg() {
   const supabase = await createClient();
@@ -155,21 +155,7 @@ export async function getInvoices() {
   if (!user || !orgId) return [];
   const adminSupabase = await createPrivilegedClient();
   const { data } = await adminSupabase.from('invoices').select('*').eq('organization_id', orgId).order('created_at', { ascending: false });
-  const today = istToday();
-  const rows = (data || []).map((row) => ({ ...row, due_date: dateOnly(row.due_date) }));
-  const dueIds = rows
-    .filter((row) => (row.status === 'pending' || row.status === 'partial') && invoiceDueOnOrBefore(row.due_date, today))
-    .map((row) => row.id);
-
-  if (dueIds.length) {
-    await adminSupabase
-      .from('invoices')
-      .update({ status: 'overdue' })
-      .in('id', dueIds)
-      .eq('organization_id', orgId);
-  }
-
-  return rows.map((row) => dueIds.includes(row.id) ? { ...row, status: 'overdue' } : row);
+  return (data || []).map((row) => ({ ...row, due_date: dateOnly(row.due_date) }));
 }
 
 export async function addInvoice(formData: FormData) {
@@ -199,25 +185,25 @@ export async function addInvoice(formData: FormData) {
   const { data: plan } = await adminSupabase.from('fee_plans').select('amount').eq('id', fee_plan_id).single();
   if (!plan) return { error: 'Fee plan not found' };
 
-  const { error } = await adminSupabase.from('invoices').insert({
+  const { data: invoice, error } = await adminSupabase.from('invoices').insert({
     organization_id: orgId,
     member_id,
     fee_plan_id,
     amount: plan.amount,
     due_date,
     status: 'pending'
-  });
+  }).select('*').single();
 
   if (error) {
     console.error('Error adding invoice:', error);
     return { error: error.message };
   }
 
-  const [{ data: member }, { data: org }] = await Promise.all([
+  void Promise.all([
     adminSupabase.from('members').select('name, email').eq('id', member_id).maybeSingle(),
     adminSupabase.from('organizations').select('name').eq('id', orgId).maybeSingle(),
-  ]);
-  if (member?.email && member.name) {
+  ]).then(([{ data: member }, { data: org }]) => {
+    if (!member?.email || !member.name) return;
     sendMembershipExpiryEmail({
       memberEmail: member.email,
       memberName: member.name,
@@ -225,9 +211,9 @@ export async function addInvoice(formData: FormData) {
       dueDate: due_date,
       amount: Number(plan.amount),
     }).catch((err) => console.error('fee due email failed:', err));
-  }
+  });
 
-  return { success: true };
+  return { success: true, invoice: { ...invoice, due_date: dateOnly(invoice.due_date) } };
 }
 
 export async function addPayment(formData: FormData) {
@@ -245,80 +231,112 @@ export async function addPayment(formData: FormData) {
 
   if (!due_date) return { error: 'Due date is required.' };
 
-  const { data: member } = await adminSupabase
-    .from('members')
-    .select('id, fee_plan_id')
-    .eq('id', member_id)
-    .eq('organization_id', orgId)
-    .maybeSingle();
+  const [{ data: member }, { data: unpaid }] = await Promise.all([
+    adminSupabase
+      .from('members')
+      .select('id, fee_plan_id, status')
+      .eq('id', member_id)
+      .eq('organization_id', orgId)
+      .maybeSingle(),
+    adminSupabase
+      .from('invoices')
+      .select('id, amount, due_date, status, fee_plan_id')
+      .eq('organization_id', orgId)
+      .eq('member_id', member_id)
+      .in('status', ['pending', 'partial', 'overdue']),
+  ]);
   if (!member) return { error: 'Member not found.' };
 
+  const openInvoices = (unpaid || []).map((row) => ({ ...row, due_date: dateOnly(row.due_date) }))
+    .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)));
+  const selected = invoice_id
+    ? openInvoices.find((row) => row.id === invoice_id) || openInvoices[0] || null
+    : openInvoices[0] || null;
+
   let planAmount = amount;
-  if (member.fee_plan_id) {
+  let durationMonths = 1;
+  const planId = member.fee_plan_id || selected?.fee_plan_id || null;
+  if (planId) {
     const { data: plan } = await adminSupabase
       .from('fee_plans')
-      .select('id, amount')
-      .eq('id', member.fee_plan_id)
+      .select('id, amount, duration_months')
+      .eq('id', planId)
       .maybeSingle();
     if (plan?.amount != null) planAmount = Number(plan.amount);
+    if (plan?.duration_months) durationMonths = Number(plan.duration_months);
   }
 
-  let resolvedInvoiceId = invoice_id;
+  const paidStatus = selected && amount >= Number(selected.amount ?? amount) ? 'paid' : selected ? 'partial' : 'paid';
+  const today = istToday();
+  let saveDue = dateOnly(selected?.due_date || due_date);
+  if (paidStatus === 'paid' && invoiceDueOnOrBefore(saveDue, today)) {
+    saveDue = nextInvoiceDueDate(saveDue, durationMonths, today);
+  }
 
-  if (resolvedInvoiceId) {
-    const { data: inv } = await adminSupabase
-      .from('invoices')
-      .select('amount')
-      .eq('id', resolvedInvoiceId)
-      .eq('organization_id', orgId)
-      .maybeSingle();
-    const newStatus = amount >= Number(inv?.amount ?? amount) ? 'paid' : 'partial';
+  let paidInvoice: Record<string, unknown> | null = selected
+    ? { ...selected, status: paidStatus, due_date: paidStatus === 'paid' ? saveDue : selected.due_date }
+    : null;
+
+  const invoiceWrite = selected
+    ? adminSupabase
+        .from('invoices')
+        .update({
+          status: paidStatus,
+          ...(paidStatus === 'paid' ? { due_date: saveDue } : {}),
+        })
+        .eq('id', selected.id)
+        .eq('organization_id', orgId)
+    : adminSupabase.from('invoices').insert({
+        organization_id: orgId,
+        member_id,
+        fee_plan_id: planId,
+        amount: planAmount,
+        due_date: saveDue,
+        status: paidStatus,
+      }).select('*').single();
+
+  const [{ error: paymentError }, invoiceResult] = await Promise.all([
+    adminSupabase.from('payments').insert({
+      organization_id: orgId,
+      member_id,
+      invoice_id: selected?.id || null,
+      amount,
+      payment_mode,
+      receipt_no,
+      notes,
+      paid_at: new Date().toISOString(),
+    }),
+    invoiceWrite,
+  ]);
+  if (paymentError) {
+    console.error('Error adding payment:', paymentError);
+    return { error: paymentError.message };
+  }
+  if (invoiceResult.error) {
+    console.error('Error updating invoice after payment:', invoiceResult.error);
+    return { error: invoiceResult.error.message };
+  }
+
+  if (!selected && 'data' in invoiceResult && invoiceResult.data) {
+    paidInvoice = { ...invoiceResult.data, due_date: dateOnly(invoiceResult.data.due_date) };
+  }
+
+  if (paidStatus === 'paid') {
     await adminSupabase
-      .from('invoices')
-      .update({ status: newStatus })
-      .eq('id', resolvedInvoiceId)
+      .from('members')
+      .update({ status: 'active' })
+      .eq('id', member_id)
       .eq('organization_id', orgId);
   }
 
-  const { error } = await adminSupabase.from('payments').insert({
-    organization_id: orgId,
-    member_id,
-    invoice_id: resolvedInvoiceId,
-    amount,
-    payment_mode,
-    receipt_no,
-    notes,
-    paid_at: new Date().toISOString()
-  });
-
-  if (error) {
-    console.error('Error adding payment:', error);
-    return { error: error.message };
-  }
-
-  const today = istToday();
-  const nextStatus = invoiceDueOnOrBefore(due_date, today) ? 'overdue' : 'pending';
-  const { data: existingNext } = await adminSupabase
-    .from('invoices')
-    .select('id')
-    .eq('organization_id', orgId)
-    .eq('member_id', member_id)
-    .eq('due_date', due_date)
-    .in('status', ['pending', 'partial', 'overdue'])
-    .maybeSingle();
-
-  if (!existingNext) {
-    await adminSupabase.from('invoices').insert({
-      organization_id: orgId,
-      member_id,
-      fee_plan_id: member.fee_plan_id || null,
-      amount: planAmount,
-      due_date,
-      status: nextStatus,
-    });
-  }
-
-  return { success: true };
+  return {
+    success: true,
+    paidInvoiceId: String(paidInvoice?.id || selected?.id || ''),
+    paidStatus,
+    paidInvoice,
+    nextDue: saveDue,
+    memberId: member_id,
+  };
 }
 export async function updateFeePlan(id: string, formData: FormData) {
   const { user, orgId } = await requireOrg();

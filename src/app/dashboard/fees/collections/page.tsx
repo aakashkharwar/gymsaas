@@ -4,7 +4,6 @@ import { toast } from 'sonner';
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { flushSync } from 'react-dom';
 import { ArrowLeft, CreditCard, IndianRupee, FileText, CalendarDays } from 'lucide-react';
 import CustomDropdown from '@/components/CustomDropdown';
 import { useQueryClient } from '@tanstack/react-query';
@@ -13,6 +12,7 @@ import { useFeePlans, useInvoices, useMembers } from '@/hooks/useGymQueries';
 import { queryKeys } from '@/lib/query-keys';
 import { useSave } from '@/components/SaveProvider';
 import { SavingButton } from '@/components/SavingButton';
+import { addCalendarMonths, formatDueDate, istToday, nextInvoiceDueDate } from '@/lib/membership-access';
 
 type Invoice = {
   id: string;
@@ -24,10 +24,8 @@ type Invoice = {
   status: 'pending' | 'partial' | 'paid' | 'overdue';
 };
 
-function defaultDueDate() {
-  const date = new Date();
-  date.setDate(date.getDate() + 30);
-  return date.toISOString().slice(0, 10);
+function defaultDueDate(months = 1) {
+  return nextInvoiceDueDate(istToday(), months);
 }
 
 export default function CollectionsPage() {
@@ -56,14 +54,16 @@ export default function CollectionsPage() {
     inv => inv.member_id === selectedMemberId && (inv.status === 'pending' || inv.status === 'partial' || inv.status === 'overdue')
   );
 
-  const handleInvoiceSelect = (id: string) => {
-    setSelectedInvoiceId(id);
-    const inv = invoices.find(i => i.id === id);
-    if (inv) {
-      setFormData(prev => ({ ...prev, amount: String(inv.amount), due_date: inv.due_date || prev.due_date }));
-      setFormErrors(prev => ({...prev, amount: undefined, due_date: undefined}));
-    }
+  const planMonthsForMember = (memberId: string) => {
+    const member = members.find((m) => m.id === memberId);
+    const plan = feePlans.find((p) => p.id === member?.fee_plan_id);
+    return Number(plan?.duration_months) || 1;
   };
+
+  const selectedInvoice = invoices.find((inv) => inv.id === selectedInvoiceId);
+  const payingOverdue = selectedInvoice && selectedInvoice.status !== 'paid' && (
+    selectedInvoice.status === 'overdue' || String(selectedInvoice.due_date) <= istToday()
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,7 +78,7 @@ export default function CollectionsPage() {
       return;
     }
 
-    flushSync(() => setIsSubmitting(true));
+    setIsSubmitting(true);
     await runSave(async () => {
       const fd = new FormData();
       fd.append('member_id', selectedMemberId);
@@ -92,15 +92,37 @@ export default function CollectionsPage() {
       const res = await addPayment(fd);
       setIsSubmitting(false);
 
-      if (res.error) {
+      if ('error' in res && res.error) {
         toast.error(res.error);
         return;
       }
 
-      queryClient.invalidateQueries({ queryKey: queryKeys.invoices });
-      queryClient.invalidateQueries({ queryKey: queryKeys.fees });
-      queryClient.invalidateQueries({ queryKey: queryKeys.feeStats });
-      toast.success('Payment collected successfully!');
+      if ('paidInvoiceId' in res) {
+        queryClient.setQueryData(queryKeys.invoices, (prev: Invoice[] | undefined) => {
+          const current = prev || [];
+          const paid = res.paidInvoice as Invoice | null;
+          if (paid?.id && !current.some((inv) => inv.id === paid.id)) {
+            return [paid, ...current];
+          }
+          return current.map((inv) => {
+            if (inv.id !== res.paidInvoiceId) return inv;
+            return {
+              ...inv,
+              status: (res.paidStatus as Invoice['status']) || inv.status,
+              due_date: paid?.due_date || inv.due_date,
+            };
+          });
+        });
+        queryClient.setQueryData(queryKeys.members, (prev: Array<{ id: string; status?: string }> | undefined) =>
+          (prev || []).map((member) => member.id === res.memberId ? { ...member, status: 'active' } : member)
+        );
+      }
+
+      toast.success(
+        res.paidStatus === 'paid'
+          ? `Payment collected. Invoice marked Paid.`
+          : 'Partial payment saved.'
+      );
       setFormData({ amount: '', payment_mode: 'UPI', receipt_no: '', notes: '', due_date: defaultDueDate() });
       setSelectedMemberId('');
       setSelectedInvoiceId('');
@@ -131,23 +153,27 @@ export default function CollectionsPage() {
                   .filter((inv) => inv.member_id === val && inv.status !== 'paid')
                   .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)));
                 const next = pending[0];
+                const months = planMonthsForMember(val);
                 if (next) {
                   setSelectedInvoiceId(next.id);
                   setFormData((prev) => ({
                     ...prev,
                     amount: String(next.amount),
-                    due_date: next.due_date || defaultDueDate(),
+                    due_date: next.due_date,
                   }));
                 } else {
                   const member = members.find((m) => m.id === val);
                   const plan = feePlans.find((p) => p.id === member?.fee_plan_id);
-                  const due = new Date();
-                  due.setMonth(due.getMonth() + (Number(plan?.duration_months) || 1));
+                  const lastPaid = invoices
+                    .filter((inv) => inv.member_id === val && inv.status === 'paid')
+                    .sort((a, b) => String(b.due_date).localeCompare(String(a.due_date)))[0];
                   setSelectedInvoiceId('');
                   setFormData((prev) => ({
                     ...prev,
                     amount: plan ? String(plan.amount) : prev.amount,
-                    due_date: due.toISOString().slice(0, 10),
+                    due_date: lastPaid?.due_date
+                      ? addCalendarMonths(lastPaid.due_date, months)
+                      : defaultDueDate(months),
                   }));
                 }
                 setFormErrors((prev) => ({ ...prev, member: undefined, amount: undefined, due_date: undefined }));
@@ -175,8 +201,12 @@ export default function CollectionsPage() {
                 setSelectedInvoiceId(val);
                 const inv = invoices.find(i => i.id === val);
                 if (inv) {
-                  setFormData(prev => ({ ...prev, amount: inv.amount.toString(), due_date: inv.due_date || prev.due_date }));
-                  setFormErrors(prev => ({ ...prev, amount: undefined, due_date: undefined }));
+                  setFormData((prev) => ({
+                    ...prev,
+                    amount: inv.amount.toString(),
+                    due_date: inv.due_date,
+                  }));
+                  setFormErrors((prev) => ({ ...prev, amount: undefined, due_date: undefined }));
                 }
               }}
               options={[
@@ -185,7 +215,7 @@ export default function CollectionsPage() {
                   const plan = feePlans.find(p => p.id === i.fee_plan_id);
                   return {
                     value: i.id,
-                    label: `${i.plan_name || plan?.name || 'Invoice'} - ₹${i.amount} · due ${i.due_date}`
+                    label: `${i.plan_name || plan?.name || 'Invoice'} - ₹${i.amount} · due ${formatDueDate(i.due_date)}`
                   };
                 })
               ]}
@@ -241,15 +271,20 @@ export default function CollectionsPage() {
                     <input
                       type="date"
                       value={formData.due_date}
+                      readOnly={!!selectedInvoiceId}
                       onChange={e => {
                         setFormData({ ...formData, due_date: e.target.value });
                         setFormErrors(prev => ({ ...prev, due_date: undefined }));
                       }}
-                      className={`w-full rounded-xl border bg-slate-50 dark:bg-slate-800/50 py-3 pl-11 pr-4 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${formErrors.due_date ? 'border-red-400 focus:border-red-500' : 'border-slate-200 dark:border-slate-700'}`}
+                      className={`w-full rounded-xl border bg-slate-50 dark:bg-slate-800/50 py-3 pl-11 pr-4 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${formErrors.due_date ? 'border-red-400 focus:border-red-500' : 'border-slate-200 dark:border-slate-700'} ${selectedInvoiceId ? 'cursor-default' : ''}`}
                     />
                   </div>
                   {formErrors.due_date && <p className="mt-2 text-sm text-red-500">{formErrors.due_date}</p>}
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Shown on the receipt. Membership expires on this date.</p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    {payingOverdue
+                      ? `Same as the invoice above (${formatDueDate(selectedInvoice?.due_date)}). It will be marked Paid.`
+                      : 'Same date as the selected invoice.'}
+                  </p>
                 </div>
 
                 <div>

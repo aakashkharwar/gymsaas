@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient, tryCreateAdminClient } from '@/utils/supabase/admin';
-import { hasUnpaidDueInvoice, istToday, MEMBERSHIP_EXPIRED_MESSAGE } from '@/lib/membership-access';
+import { istToday, MEMBERSHIP_EXPIRED_MESSAGE, membershipExpired } from '@/lib/membership-access';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -97,9 +97,8 @@ export async function POST(request: Request) {
         .from('invoices')
         .select('due_date, status')
         .eq('organization_id', orgId)
-        .eq('member_id', member.id)
-        .neq('status', 'paid');
-      membershipBlocked = hasUnpaidDueInvoice(invoices || [], today);
+        .eq('member_id', member.id);
+      membershipBlocked = membershipExpired(invoices || [], today);
     } catch (err) {
       console.error('Membership invoice lookup failed', err);
     }

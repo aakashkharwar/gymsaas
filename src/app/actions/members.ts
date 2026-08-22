@@ -106,7 +106,11 @@ export async function updateMember(id: string, formData: FormData) {
     : notesRaw
   const plan_type = formData.get('plan_type') as string;
 
-  const { error } = await supabase
+  const orgId = await resolveOrgId(supabase, user);
+  if (!orgId) return { error: 'No organization found' };
+
+  const adminSupabase = await createPrivilegedClient();
+  const { error } = await adminSupabase
     .from('members')
     .update({
       name,
@@ -118,7 +122,8 @@ export async function updateMember(id: string, formData: FormData) {
       notes: notes || null,
       plan_type,
     })
-    .eq('id', id);
+    .eq('id', id)
+    .eq('organization_id', orgId);
 
   if (error) {
     return { error: friendlyDbError(error.message) };

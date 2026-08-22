@@ -28,7 +28,6 @@ export default function LogExpenseModal() {
     } else {
       setIsOpen(false);
       queryClient.invalidateQueries({ queryKey: queryKeys.expenses });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
     }
   };
 
