@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient, tryCreateAdminClient } from '@/utils/supabase/admin';
-import { hasUnpaidDueInvoice, MEMBERSHIP_EXPIRED_MESSAGE } from '@/lib/membership-access';
+import { hasUnpaidDueInvoice, istToday, MEMBERSHIP_EXPIRED_MESSAGE } from '@/lib/membership-access';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -15,8 +15,10 @@ function phoneCandidates(raw: string) {
   return Array.from(new Set([last10, `91${last10}`, `+91${last10}`, all]));
 }
 
-function istToday() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+function isMissingColumn(message?: string | null, column?: string) {
+  const text = (message || '').toLowerCase();
+  if (!column) return text.includes('schema cache') || text.includes('column');
+  return text.includes(column.toLowerCase()) && (text.includes('schema cache') || text.includes('column') || text.includes('does not exist'));
 }
 
 export async function GET(request: Request) {
@@ -52,7 +54,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Enter a valid 10-digit mobile number.' }, { status: 400 });
     }
 
-    const admin = createAdminClient();
+    let admin;
+    try {
+      admin = createAdminClient();
+    } catch {
+      return NextResponse.json({ error: 'Check-in is not configured' }, { status: 500 });
+    }
+
     const { data: org } = await admin.from('organizations').select('id, name').eq('id', orgId).maybeSingle();
     if (!org) {
       return NextResponse.json({ error: 'Gym not found' }, { status: 404 });
@@ -83,45 +91,60 @@ export async function POST(request: Request) {
     }
 
     const today = istToday();
-    const { data: invoices } = await admin
-      .from('invoices')
-      .select('due_date, status')
-      .eq('organization_id', orgId)
-      .eq('member_id', member.id)
-      .neq('status', 'paid');
+    let membershipBlocked = false;
+    try {
+      const { data: invoices } = await admin
+        .from('invoices')
+        .select('due_date, status')
+        .eq('organization_id', orgId)
+        .eq('member_id', member.id)
+        .neq('status', 'paid');
+      membershipBlocked = hasUnpaidDueInvoice(invoices || [], today);
+    } catch (err) {
+      console.error('Membership invoice lookup failed', err);
+    }
 
-    const membershipBlocked = hasUnpaidDueInvoice(invoices || [], today);
     type TodayRow = {
       id: string;
       check_in_time: string;
-      marked_by: string | null;
+      marked_by?: string | null;
       check_out_time?: string | null;
     };
 
-    const firstToday = await admin
-      .from('attendance')
-      .select('id, check_in_time, check_out_time, marked_by')
-      .eq('organization_id', orgId)
-      .eq('member_id', member.id)
-      .gte('check_in_time', `${today}T00:00:00+05:30`)
-      .order('check_in_time', { ascending: false });
+    type AttendanceLookup = {
+      data: TodayRow[] | null;
+      error: { message?: string } | null;
+    };
 
-    let todayRows: TodayRow[] = (firstToday.data || []) as TodayRow[];
-
-    if (firstToday.error && /check_out_time/i.test(firstToday.error.message)) {
-      const fallbackToday = await admin
+    const loadTodayRows = async (columns: string): Promise<AttendanceLookup> => {
+      const result = await admin
         .from('attendance')
-        .select('id, check_in_time, marked_by')
+        .select(columns)
         .eq('organization_id', orgId)
         .eq('member_id', member.id)
         .gte('check_in_time', `${today}T00:00:00+05:30`)
         .order('check_in_time', { ascending: false });
-      todayRows = (fallbackToday.data || []) as TodayRow[];
+      return {
+        data: (result.data || null) as TodayRow[] | null,
+        error: result.error,
+      };
+    };
+
+    let firstToday = await loadTodayRows('id, check_in_time, check_out_time, marked_by');
+
+    if (firstToday.error && isMissingColumn(firstToday.error.message, 'check_out_time')) {
+      firstToday = await loadTodayRows('id, check_in_time, marked_by');
     }
+
+    if (firstToday.error && isMissingColumn(firstToday.error.message, 'marked_by')) {
+      firstToday = await loadTodayRows('id, check_in_time');
+    }
+
+    const todayRows: TodayRow[] = firstToday.data || [];
 
     const openSession = todayRows.find((row) => {
       if (row.marked_by === 'out') return false;
-      if ('check_out_time' in row && row.check_out_time) return false;
+      if (row.check_out_time) return false;
       return !todayRows.some((candidate) => (
         candidate.marked_by === 'out' &&
         new Date(candidate.check_in_time).getTime() >= new Date(row.check_in_time).getTime()
@@ -143,16 +166,16 @@ export async function POST(request: Request) {
         .eq('id', openSession.id)
         .eq('organization_id', orgId);
 
-      if (updated.error && /check_out_time/i.test(updated.error.message)) {
-        const fallback = await admin.from('attendance').insert({
+      if (updated.error && isMissingColumn(updated.error.message, 'check_out_time')) {
+        const fallback = await insertAttendance(admin, {
           organization_id: orgId,
           member_id: member.id,
           check_in_time: now,
           sync_status: 'synced',
           marked_by: 'out',
         });
-        if (fallback.error) {
-          console.error('Public checkout insert failed', fallback.error);
+        if (fallback) {
+          console.error('Public checkout insert failed', fallback);
           return NextResponse.json({ error: 'Could not mark exit. Try again.' }, { status: 500 });
         }
       } else if (updated.error) {
@@ -176,7 +199,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const { error } = await admin.from('attendance').insert({
+    const insertError = await insertAttendance(admin, {
       organization_id: orgId,
       member_id: member.id,
       check_in_time: now,
@@ -184,8 +207,8 @@ export async function POST(request: Request) {
       marked_by: 'qr',
     });
 
-    if (error) {
-      console.error('Public check-in insert failed', error);
+    if (insertError) {
+      console.error('Public check-in insert failed', insertError);
       return NextResponse.json({ error: 'Could not mark attendance. Try again.' }, { status: 500 });
     }
 
@@ -200,4 +223,31 @@ export async function POST(request: Request) {
     console.error('Public check-in error', err);
     return NextResponse.json({ error: 'Could not mark attendance. Try again.' }, { status: 500 });
   }
+}
+
+async function insertAttendance(
+  admin: ReturnType<typeof createAdminClient>,
+  row: {
+    organization_id: string;
+    member_id: string;
+    check_in_time: string;
+    sync_status?: string;
+    marked_by?: string;
+  },
+) {
+  const attempts = [
+    row,
+    { organization_id: row.organization_id, member_id: row.member_id, check_in_time: row.check_in_time, marked_by: row.marked_by },
+    { organization_id: row.organization_id, member_id: row.member_id, check_in_time: row.check_in_time, sync_status: row.sync_status },
+    { organization_id: row.organization_id, member_id: row.member_id, check_in_time: row.check_in_time },
+  ];
+
+  let lastError: { message?: string } | null = null;
+  for (const payload of attempts) {
+    const result = await admin.from('attendance').insert(payload);
+    if (!result.error) return null;
+    lastError = result.error;
+    if (!isMissingColumn(result.error.message)) break;
+  }
+  return lastError;
 }

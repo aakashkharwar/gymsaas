@@ -127,9 +127,30 @@ export default function CollectionsPage() {
               value={selectedMemberId}
               onChange={(val) => {
                 setSelectedMemberId(val);
-                setSelectedInvoiceId('');
-                setFormData(prev => ({ ...prev, due_date: defaultDueDate() }));
-                setFormErrors(prev => ({ ...prev, member: undefined }));
+                const pending = invoices
+                  .filter((inv) => inv.member_id === val && inv.status !== 'paid')
+                  .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)));
+                const next = pending[0];
+                if (next) {
+                  setSelectedInvoiceId(next.id);
+                  setFormData((prev) => ({
+                    ...prev,
+                    amount: String(next.amount),
+                    due_date: next.due_date || defaultDueDate(),
+                  }));
+                } else {
+                  const member = members.find((m) => m.id === val);
+                  const plan = feePlans.find((p) => p.id === member?.fee_plan_id);
+                  const due = new Date();
+                  due.setMonth(due.getMonth() + (Number(plan?.duration_months) || 1));
+                  setSelectedInvoiceId('');
+                  setFormData((prev) => ({
+                    ...prev,
+                    amount: plan ? String(plan.amount) : prev.amount,
+                    due_date: due.toISOString().slice(0, 10),
+                  }));
+                }
+                setFormErrors((prev) => ({ ...prev, member: undefined, amount: undefined, due_date: undefined }));
               }}
               options={[
                 { value: '', label: 'Select a member...' },

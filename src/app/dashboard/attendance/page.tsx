@@ -9,6 +9,9 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import CustomDropdown from '@/components/CustomDropdown';
 import { markAttendanceExit } from '@/app/actions/attendance';
+import { useAttendance, useMembers } from '@/hooks/useGymQueries';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query-keys';
 
 const CameraScanner = dynamic(() => import('@/components/CameraScanner'), { ssr: false });
 
@@ -139,6 +142,9 @@ function parseName(fullName: string) {
 }
 
 export default function AttendancePage() {
+  const queryClient = useQueryClient();
+  const { data: serverAttendance = [] } = useAttendance();
+  const { data: memberList = [] } = useMembers();
   const [records, setRecords] = useState<AttendanceRecord[]>(sampleRecords);
   
   const [mode, setMode] = useState<'dashboard' | 'scanner' | 'form'>('dashboard');
@@ -251,74 +257,52 @@ export default function AttendancePage() {
   }
 
   useEffect(() => {
-    let mounted = true;
-    
-    async function loadData() {
-      try {
-        const m = await import('@/utils/storage');
-        const localSaved = await m.getAttendance() || [];
-        const unsynced = Array.isArray(localSaved) ? localSaved.filter(r => r.syncStatus !== 'synced') : [];
-        
-        if (navigator.onLine) {
-          try {
-            const att = await import('@/app/actions/attendance');
-            const membersMod = await import('@/app/actions/members');
-            const [serverData, memberList] = await Promise.all([
-              att.getTodayAttendance(),
-              membersMod.getMembers(),
-            ]);
-            if (Array.isArray(memberList)) {
-              await m.saveMembers(memberList.map((mem: any) => ({ ...mem, qrCode: mem.phone, username: mem.phone })));
-            }
-            
-            // Map server data to AttendanceRecord format
-            const mapped = serverData.map((s: any) => {
-              const d = new Date(s.check_in_time);
-              const pName = parseName(s.members?.name || 'Unknown');
-              return {
-                id: s.id,
-                firstName: pName.first,
-                middleName: pName.middle,
-                lastName: pName.last,
-                qrCode: s.members?.phone || '',
-                entryTime: d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' }),
-                exitTime: s.check_out_time
-                  ? new Date(s.check_out_time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })
-                  : '',
-                status: 'present' as AttendanceStatus,
-                date: d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
-                createdAt: s.check_in_time,
-                syncStatus: s.sync_status as SyncStatus,
-                checkInAt: s.check_in_time,
-                checkOutAt: s.check_out_time || '',
-              };
-            });
-            
-            // Merge: take unsynced + server records
-            if (mounted) {
-              // avoid duplicate IDs
-              const unsyncedFiltered = unsynced.filter(u => !mapped.find((m: any) => m.id === u.id));
-              setRecords([...unsyncedFiltered, ...mapped]);
-            }
-          } catch (e) {
-            console.error('Failed to fetch server attendance', e);
-            if (mounted && Array.isArray(localSaved)) setRecords(localSaved);
-          }
-        } else {
-          if (mounted && Array.isArray(localSaved)) setRecords(localSaved);
-        }
-      } catch (err) {
-        console.error('Storage error', err);
-      }
+    if (memberList.length) {
+      import('@/utils/storage').then((m) => m.saveMembers(
+        memberList.map((mem: LocalMember) => ({ ...mem, qrCode: mem.phone, username: mem.phone }))
+      )).catch(() => {});
     }
-    
-    loadData();
-    const refresh = window.setInterval(loadData, 15000);
-    return () => {
-      mounted = false;
-      window.clearInterval(refresh);
-    };
-  }, []);
+  }, [memberList]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const storage = await import('@/utils/storage');
+      const localSaved = await storage.getAttendance() || [];
+      const unsynced = Array.isArray(localSaved) ? localSaved.filter((r) => r.syncStatus !== 'synced') : [];
+
+      const mapped = (serverAttendance || []).map((s: any) => {
+        const d = new Date(s.check_in_time);
+        const pName = parseName(s.members?.name || 'Unknown');
+        return {
+          id: s.id,
+          firstName: pName.first,
+          middleName: pName.middle,
+          lastName: pName.last,
+          qrCode: s.members?.phone || '',
+          entryTime: d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' }),
+          exitTime: s.check_out_time
+            ? new Date(s.check_out_time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })
+            : '',
+          status: 'present' as AttendanceStatus,
+          date: d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
+          createdAt: s.check_in_time,
+          syncStatus: s.sync_status as SyncStatus,
+          checkInAt: s.check_in_time,
+          checkOutAt: s.check_out_time || '',
+        };
+      });
+
+      if (!mounted) return;
+      if (!navigator.onLine && !mapped.length) {
+        setRecords(Array.isArray(localSaved) ? localSaved : []);
+        return;
+      }
+      const unsyncedFiltered = unsynced.filter((u) => !mapped.find((row) => row.id === u.id));
+      setRecords([...unsyncedFiltered, ...mapped]);
+    })();
+    return () => { mounted = false; };
+  }, [serverAttendance]);
 
   // If the page is opened with ?qr=... (for example when a mobile device scans the QR),
   // open the attendance form with the QR prefilled.
@@ -612,6 +596,7 @@ export default function AttendancePage() {
       row.id === record.id ? { ...row, exitTime, checkOutAt: result.checkOutTime } : row
     )));
     toast.success('Exit marked');
+    queryClient.invalidateQueries({ queryKey: queryKeys.attendance });
   };
 
   return (

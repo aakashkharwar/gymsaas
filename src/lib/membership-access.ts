@@ -1,9 +1,18 @@
 export const MEMBERSHIP_EXPIRED_MESSAGE =
   'Membership expired. Please pay your fee at reception to mark attendance.';
 
+export function istToday() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+
+export function dateOnly(value: string | null | undefined) {
+  return String(value || '').slice(0, 10);
+}
+
 export function invoiceDueOnOrBefore(dueDate: string | null | undefined, today: string) {
-  if (!dueDate) return false;
-  return String(dueDate).slice(0, 10) <= today;
+  const due = dateOnly(dueDate);
+  if (!due) return false;
+  return due <= today;
 }
 
 export function hasUnpaidDueInvoice(

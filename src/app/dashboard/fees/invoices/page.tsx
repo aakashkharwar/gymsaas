@@ -55,7 +55,7 @@ export default function InvoicesPage() {
     });
   };
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const handleGenerateInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -360,10 +360,10 @@ export default function InvoicesPage() {
                     <span className={`shrink-0 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
                       inv.status === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' :
                       inv.status === 'overdue' ? 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400' :
-                      (inv.status === 'pending' && inv.due_date === today) ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' :
+                      (inv.status === 'pending' && String(inv.due_date).slice(0, 10) === today) ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' :
                       'bg-slate-100 text-slate-700 dark:bg-slate-500/10 dark:text-slate-400'
                     }`}>
-                      {(inv.status === 'pending' && inv.due_date === today) ? 'Due Today' : (inv.status.charAt(0).toUpperCase() + inv.status.slice(1))}
+                      {(inv.status === 'pending' && String(inv.due_date).slice(0, 10) === today) ? 'Due Today' : (inv.status.charAt(0).toUpperCase() + inv.status.slice(1))}
                     </span>
                   </div>
                   <Button variant="outline" size="sm" onClick={() => handleDownloadPdf(inv)} className="w-full">
@@ -401,11 +401,11 @@ export default function InvoicesPage() {
                           <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
                             inv.status === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' :
                             inv.status === 'overdue' ? 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400' :
-                            (inv.status === 'pending' && inv.due_date === today) ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' :
+                            (inv.status === 'pending' && String(inv.due_date).slice(0, 10) === today) ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' :
                             'bg-slate-100 text-slate-700 dark:bg-slate-500/10 dark:text-slate-400'
                           }`}>
                             {inv.status === 'overdue' && <AlertCircle className="h-3.5 w-3.5" />}
-                            {(inv.status === 'pending' && inv.due_date === today) ? 'Due Today' : (inv.status.charAt(0).toUpperCase() + inv.status.slice(1))}
+                            {(inv.status === 'pending' && String(inv.due_date).slice(0, 10) === today) ? 'Due Today' : (inv.status.charAt(0).toUpperCase() + inv.status.slice(1))}
                           </span>
 
                       </td>

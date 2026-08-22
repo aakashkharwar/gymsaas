@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { getMembers } from '@/app/actions/members'
 import { getFeePlans, getFees, getInvoices, getOrganizationDetails } from '@/app/actions/fees'
+import { getTodayAttendance } from '@/app/actions/attendance'
 import { queryKeys } from '@/lib/query-keys'
 
 const staleTime = 5 * 60_000
@@ -44,5 +45,14 @@ export function useOrganizationDetails() {
     queryKey: queryKeys.orgDetails,
     queryFn: getOrganizationDetails,
     staleTime,
+  })
+}
+
+export function useAttendance() {
+  return useQuery({
+    queryKey: queryKeys.attendance,
+    queryFn: getTodayAttendance,
+    staleTime: 10_000,
+    refetchInterval: 15_000,
   })
 }

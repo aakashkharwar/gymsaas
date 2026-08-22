@@ -3,6 +3,7 @@ import { getDashboardStats } from '@/app/actions/dashboard'
 import { getMembers } from '@/app/actions/members'
 import { getExpenses } from '@/app/actions/expenses'
 import { getFeeDashboardStats, getFeePlans, getFees, getInvoices } from '@/app/actions/fees'
+import { getTodayAttendance } from '@/app/actions/attendance'
 import { queryKeys } from '@/lib/query-keys'
 
 export function prefetchDashboardRoute(queryClient: QueryClient, href: string) {
@@ -18,6 +19,10 @@ export function prefetchDashboardRoute(queryClient: QueryClient, href: string) {
     queryClient.prefetchQuery({ queryKey: queryKeys.fees, queryFn: getFees })
     queryClient.prefetchQuery({ queryKey: queryKeys.feePlans, queryFn: getFeePlans })
     queryClient.prefetchQuery({ queryKey: queryKeys.invoices, queryFn: getInvoices })
+    queryClient.prefetchQuery({ queryKey: queryKeys.members, queryFn: getMembers })
+  }
+  if (href === '/dashboard/attendance' || href.startsWith('/dashboard/attendance/')) {
+    queryClient.prefetchQuery({ queryKey: queryKeys.attendance, queryFn: getTodayAttendance })
     queryClient.prefetchQuery({ queryKey: queryKeys.members, queryFn: getMembers })
   }
   if (href === '/dashboard/expenses') {

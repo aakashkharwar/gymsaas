@@ -5,11 +5,12 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { Home, Users, CheckSquare, CreditCard, Receipt, Settings, Menu, X, Clipboard } from 'lucide-react';
+import { Home, Users, CheckSquare, CreditCard, Receipt, Settings, Menu, X, Clipboard, ShoppingBag } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { prefetchDashboardRoute } from '@/lib/prefetch-dashboard';
 import { getMembers } from '@/app/actions/members';
 import { getFeePlans, getInvoices } from '@/app/actions/fees';
+import { getTodayAttendance } from '@/app/actions/attendance';
 import { queryKeys } from '@/lib/query-keys';
 import ThemeToggle from '../../components/ThemeToggle';
 
@@ -64,6 +65,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     queryClient.prefetchQuery({ queryKey: queryKeys.members, queryFn: getMembers });
     queryClient.prefetchQuery({ queryKey: queryKeys.feePlans, queryFn: getFeePlans });
     queryClient.prefetchQuery({ queryKey: queryKeys.invoices, queryFn: getInvoices });
+    queryClient.prefetchQuery({ queryKey: queryKeys.attendance, queryFn: getTodayAttendance });
   }, [queryClient]);
 
   // Register offline cache so attendance scanner still works without network
@@ -131,6 +133,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     { href: '/dashboard/admission', label: 'Admission', icon: Clipboard, active: pathname.includes('/admission') },
     { href: '/dashboard/attendance', label: 'Attendance', icon: CheckSquare, active: pathname.includes('/attendance') },
     { href: '/dashboard/fees', label: 'Fee Collection', icon: CreditCard, active: pathname.includes('/fees') && !pathname.includes('/fees/plans') },
+    { href: '/dashboard/shop', label: 'Shop', icon: ShoppingBag, active: pathname.includes('/shop') },
     { href: '/dashboard/expenses', label: 'Expenses', icon: Receipt, active: pathname.includes('/expenses') },
     { href: '/dashboard/fees/plans', label: 'Fee Plans', icon: Settings, active: pathname.includes('/fees/plans') },
   ];

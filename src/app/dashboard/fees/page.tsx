@@ -92,6 +92,9 @@ export default function FeesDashboard() {
             <Link href="/dashboard/fees/ledger" className="block w-full cursor-pointer rounded-xl bg-slate-50 dark:bg-slate-800/50 p-4 text-center font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
               View Payment Ledger
             </Link>
+            <Link href="/dashboard/shop" className="block w-full cursor-pointer rounded-xl bg-slate-50 dark:bg-slate-800/50 p-4 text-center font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+              Shop sale (protein etc.)
+            </Link>
           </div>
         </div>
 

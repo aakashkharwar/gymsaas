@@ -7,4 +7,6 @@ export const queryKeys = {
   feeStats: ['fee-stats'] as const,
   invoices: ['invoices'] as const,
   orgDetails: ['org-details'] as const,
+  shopSales: ['shop-sales'] as const,
+  attendance: ['attendance'] as const,
 }
