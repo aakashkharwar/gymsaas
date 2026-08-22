@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { updateOrganizationStatus } from '@/app/actions/super-admin';
 import { MoreVertical, ShieldAlert } from 'lucide-react';
+import { useSave } from '@/components/SaveProvider';
 
 export default function TenantStatusModal({ 
   organizationId, 
@@ -13,12 +14,13 @@ export default function TenantStatusModal({
   currentStatus: string;
   gymName: string;
 }) {
+  const runSave = useSave();
   const [isOpen, setIsOpen] = useState(false);
   const [isPending, setIsPending] = useState(false);
 
   const handleStatusChange = async (newStatus: string) => {
     setIsPending(true);
-    const res = await updateOrganizationStatus(organizationId, newStatus);
+    const res = await runSave(() => updateOrganizationStatus(organizationId, newStatus));
     setIsPending(false);
     
     if (res.error) {

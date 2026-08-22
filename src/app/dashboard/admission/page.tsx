@@ -7,9 +7,12 @@ import { submitAdmissionForm } from '@/app/actions/members';
 import { ChevronDown } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { useSave } from '@/components/SaveProvider';
+import { SavingButton } from '@/components/SavingButton';
 
 export default function AdmissionPage() {
   const queryClient = useQueryClient();
+  const runSave = useSave();
   const [gymName, setGymName] = useState('GYM NAME');
   const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -76,7 +79,7 @@ export default function AdmissionPage() {
     formData.set('sex', sex);
 
     setIsSubmitting(true);
-    const result = await submitAdmissionForm(formData);
+    const result = await runSave(() => submitAdmissionForm(formData));
     setIsSubmitting(false);
 
     if (result.error) {
@@ -299,13 +302,14 @@ export default function AdmissionPage() {
           </section>
 
           <div className="flex justify-end border-t border-slate-200 dark:border-slate-800 pt-6">
-            <Button
+            <SavingButton
               type="submit"
-              disabled={isSubmitting}
-              className="focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              saving={isSubmitting}
+              savingLabel="Saving..."
+              className="focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
-              {isSubmitting ? 'Saving...' : 'Submit Admission'}
-            </Button>
+              Submit Admission
+            </SavingButton>
           </div>
         </form>
       </div>

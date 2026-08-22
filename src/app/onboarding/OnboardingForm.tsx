@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { updateOrganizationSettings } from '@/app/actions/onboarding';
 import { Loader2 } from 'lucide-react';
 import { onboardingSchema } from '@/utils/validations';
+import { useSave } from '@/components/SaveProvider';
 
 const AVAILABLE_SERVICES = [
   'Strength Training',
@@ -17,6 +18,7 @@ const AVAILABLE_SERVICES = [
 
 export default function OnboardingForm({ initialSlug }: { initialSlug: string }) {
   const [slug, setSlug] = useState(initialSlug);
+  const runSave = useSave();
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -60,7 +62,7 @@ export default function OnboardingForm({ initialSlug }: { initialSlug: string })
     setError(null);
     
     const formData = new FormData(e.currentTarget);
-    const result = await updateOrganizationSettings(formData);
+    const result = await runSave(() => updateOrganizationSettings(formData));
     
     if (result.error) {
       setError(result.error);

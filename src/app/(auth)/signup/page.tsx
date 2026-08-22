@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { signup } from '@/app/actions/auth';
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SaveBusy } from '@/components/SaveProvider';
 
 function normalizeMessage(value: unknown): string | null {
   if (typeof value === 'string') return value;
@@ -103,6 +104,7 @@ export default function SignupPage() {
 
   return (
     <div className="w-full text-slate-900 dark:text-white">
+      <SaveBusy active={isPending} />
       <div className="text-center mb-8">
         <h2 className="text-3xl font-extrabold tracking-tight">
           Start your 14-day free trial

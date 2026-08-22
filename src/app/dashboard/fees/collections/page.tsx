@@ -3,9 +3,16 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { flushSync } from 'react-dom';
 import { ArrowLeft, CreditCard, IndianRupee, FileText, CalendarDays } from 'lucide-react';
 import CustomDropdown from '@/components/CustomDropdown';
+import { useQueryClient } from '@tanstack/react-query';
+import { addPayment } from '@/app/actions/fees';
+import { useFeePlans, useInvoices, useMembers } from '@/hooks/useGymQueries';
+import { queryKeys } from '@/lib/query-keys';
+import { useSave } from '@/components/SaveProvider';
+import { SavingButton } from '@/components/SavingButton';
 
 type Invoice = {
   id: string;
@@ -24,9 +31,11 @@ function defaultDueDate() {
 }
 
 export default function CollectionsPage() {
-  const [members, setMembers] = useState<{ id: string; name: string; phone: string }[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [feePlans, setFeePlans] = useState<{ id: string; name: string }[]>([]);
+  const queryClient = useQueryClient();
+  const runSave = useSave();
+  const { data: members = [], isPending: membersLoading } = useMembers();
+  const { data: invoices = [], isPending: invoicesLoading } = useInvoices();
+  const { data: feePlans = [] } = useFeePlans();
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const [selectedInvoiceId, setSelectedInvoiceId] = useState('');
   
@@ -41,23 +50,6 @@ export default function CollectionsPage() {
   const [formErrors, setFormErrors] = useState<{ member?: string; amount?: string; due_date?: string }>({});
   
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      const m = await import('@/app/actions/fees');
-      const membersData = await (await import('@/app/actions/members')).getMembers();
-      const invoicesData = await m.getInvoices();
-      const plansData = await m.getFeePlans();
-      if (mounted) {
-        setMembers(membersData);
-        setInvoices(invoicesData);
-        setFeePlans(plansData);
-      }
-    };
-    load();
-    return () => { mounted = false; };
-  }, []);
 
 
   const pendingInvoices = invoices.filter(
@@ -86,35 +78,33 @@ export default function CollectionsPage() {
       return;
     }
 
-    setIsSubmitting(true);
-    const fd = new FormData();
-    fd.append('member_id', selectedMemberId);
-    if (selectedInvoiceId) fd.append('invoice_id', selectedInvoiceId);
-    fd.append('amount', formData.amount);
-    fd.append('payment_mode', formData.payment_mode);
-    fd.append('receipt_no', formData.receipt_no);
-    fd.append('notes', formData.notes);
-    fd.append('due_date', formData.due_date);
+    flushSync(() => setIsSubmitting(true));
+    await runSave(async () => {
+      const fd = new FormData();
+      fd.append('member_id', selectedMemberId);
+      if (selectedInvoiceId) fd.append('invoice_id', selectedInvoiceId);
+      fd.append('amount', formData.amount);
+      fd.append('payment_mode', formData.payment_mode);
+      fd.append('receipt_no', formData.receipt_no);
+      fd.append('notes', formData.notes);
+      fd.append('due_date', formData.due_date);
 
-    const m = await import('@/app/actions/fees');
-    const res = await m.addPayment(fd);
+      const res = await addPayment(fd);
+      setIsSubmitting(false);
 
-    setIsSubmitting(false);
+      if (res.error) {
+        toast.error(res.error);
+        return;
+      }
 
-    if (res.error) {
-      toast.error(res.error);
-      return;
-    }
-
-    if (selectedInvoiceId) {
-      const current = await m.getInvoices();
-      setInvoices(current);
-    }
-
-    toast.success('Payment collected successfully!');
-    setFormData({ amount: '', payment_mode: 'UPI', receipt_no: '', notes: '', due_date: defaultDueDate() });
-    setSelectedMemberId('');
-    setSelectedInvoiceId('');
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices });
+      queryClient.invalidateQueries({ queryKey: queryKeys.fees });
+      queryClient.invalidateQueries({ queryKey: queryKeys.feeStats });
+      toast.success('Payment collected successfully!');
+      setFormData({ amount: '', payment_mode: 'UPI', receipt_no: '', notes: '', due_date: defaultDueDate() });
+      setSelectedMemberId('');
+      setSelectedInvoiceId('');
+    });
   };
 
   return (
@@ -146,6 +136,7 @@ export default function CollectionsPage() {
                 ...members.map(m => ({ value: m.id, label: m.name + (m.phone ? ` - ${m.phone}` : '') }))
               ]}
               hasError={!!formErrors.member}
+              loading={membersLoading}
             />
             {formErrors.member && <p className="mt-2 text-sm text-red-500">{formErrors.member}</p>}
           </div>
@@ -178,6 +169,7 @@ export default function CollectionsPage() {
                 })
               ]}
               placeholder={selectedMemberId ? "Select an unpaid invoice..." : "Select a member first..."}
+              loading={invoicesLoading}
             />
           </div>
         </div>
@@ -262,13 +254,9 @@ export default function CollectionsPage() {
               </div>
 
               <div className="flex justify-end pt-4">
-                <Button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="cursor-pointer text-base disabled:opacity-70 disabled:cursor-not-allowed"
-                >
-                  {isSubmitting ? 'Saving...' : 'Save Payment'}
-                </Button>
+                <SavingButton type="submit" saving={isSubmitting} savingLabel="Saving payment..." className="text-base">
+                  Save Payment
+                </SavingButton>
               </div>
             </div>
         </form>

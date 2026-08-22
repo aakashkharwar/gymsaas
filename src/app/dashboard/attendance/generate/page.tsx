@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import Link from 'next/link';
 import { ArrowLeft, Download, Printer, RefreshCw, Save, Trash2, QrCode } from 'lucide-react';
+import { useMembers } from '@/hooks/useGymQueries';
 
 type QRToken = {
   token: string;
@@ -30,9 +31,10 @@ export default function QRGeneratorPage() {
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [saved, setSaved] = useState<QRToken[]>([]);
 
-  const [members, setMembers] = useState<Member[]>([]);
+  const { data: members = [] } = useMembers();
   const [assocMemberId, setAssocMemberId] = useState<string | undefined>(undefined);
   const [gymName, setGymName] = useState('GYM NAME');
+  const [orgId, setOrgId] = useState('');
 
   useEffect(() => {
     setToken(`GYM-${Math.floor(100 + Math.random() * 900)}`);
@@ -40,7 +42,10 @@ export default function QRGeneratorPage() {
 
   useEffect(() => {
     import('@/app/actions/dashboard').then((m) => {
-      m.getGymName().then(setGymName);
+      m.getCheckInContext().then((ctx) => {
+        setGymName(ctx.gymName);
+        setOrgId(ctx.orgId);
+      });
     });
   }, []);
 
@@ -51,10 +56,6 @@ export default function QRGeneratorPage() {
         const tok = await m.getQRTokens();
         if (mounted && Array.isArray(tok)) setSaved(tok);
       } catch {}
-      try {
-        const mem = await m.getMembers();
-        if (mounted && Array.isArray(mem)) setMembers(mem);
-      } catch {}
     });
     return () => { mounted = false; };
   }, []);
@@ -62,17 +63,18 @@ export default function QRGeneratorPage() {
   useEffect(() => {
     generate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, size]);
+  }, [token, size, orgId]);
 
   const getTargetUrl = () => {
-    if (typeof window === 'undefined') return `/dashboard/attendance?qr=${encodeURIComponent(token)}`;
-    return `${window.location.origin}/dashboard/attendance?qr=${encodeURIComponent(token)}`;
+    const origin = typeof window === 'undefined' ? '' : window.location.origin;
+    const params = new URLSearchParams({ qr: token });
+    if (orgId) params.set('org', orgId);
+    return `${origin}/check-in?${params.toString()}`;
   };
 
   async function generate() {
     try {
-      const url = getTargetUrl();
-      const data = await QRCode.toDataURL(url, { margin: 1, width: size, errorCorrectionLevel: 'H', color: { dark: '#f59e0b', light: '#000000' } });
+      const data = await QRCode.toDataURL(getTargetUrl(), { margin: 1, width: size, errorCorrectionLevel: 'H', color: { dark: '#111827', light: '#ffffff' } });
       setQrDataUrl(data);
     } catch (err) {
       setQrDataUrl('');
@@ -109,14 +111,14 @@ export default function QRGeneratorPage() {
 <head>
   <title>Print QR - ${token}</title>
   <style>
-    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: #eee; }
-    .card { background: #000; color: #fff; width: min(340px, 92vw); min-height: 480px; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; padding: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
-    h1 { margin: 8px 0 0; font-size: clamp(22px, 8vw, 36px); font-weight: 900; text-transform: uppercase; line-height: 1; text-align: center; word-break: break-word; }
-    h2 { margin: 6px 0 0; font-size: clamp(14px, 5vw, 22px); font-weight: 700; text-transform: uppercase; line-height: 1.1; text-align: center; }
-    p.desc { text-align: center; font-size: 13px; color: #ccc; margin: 16px 0; line-height: 1.4; }
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: #f1f5f9; }
+    .card { background: #fff; color: #0f172a; width: min(340px, 92vw); min-height: 480px; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; padding: 28px 24px; box-shadow: 0 10px 25px rgba(15,23,42,0.12); border: 1px solid #e2e8f0; }
+    h1 { margin: 8px 0 0; font-size: clamp(22px, 8vw, 36px); font-weight: 900; text-transform: uppercase; line-height: 1; text-align: center; word-break: break-word; color: #0f172a; }
+    h2 { margin: 6px 0 0; font-size: clamp(14px, 5vw, 22px); font-weight: 700; text-transform: uppercase; line-height: 1.1; text-align: center; color: #d97706; }
+    p.desc { text-align: center; font-size: 13px; color: #475569; margin: 16px 0; line-height: 1.4; }
     .qr-container { margin: 10px 0; display: flex; justify-content: center; width: 100%; }
-    img { width: min(${size}px, 70vw); height: auto; display: block; background: #fff; padding: 8px; }
-    .footer { margin-top: 25px; text-align: center; font-size: 13px; font-style: italic; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #fff; }
+    img { width: min(${size}px, 70vw); height: auto; display: block; background: #fff; padding: 8px; border: 1px solid #e2e8f0; }
+    .footer { margin-top: 25px; text-align: center; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #334155; }
     .footer div { margin: 4px 0; }
   </style>
 </head>
@@ -124,7 +126,7 @@ export default function QRGeneratorPage() {
   <div class="card">
     <h1>${gymName}</h1>
     <h2>ATTENDANCE SCANNER</h2>
-    <p class="desc">Please scan this QR code using your<br/>phone or show it to the receptionist<br/>to mark your daily attendance.</p>
+    <p class="desc">Phone Camera se QR scan karein.<br/>Mobile number daalein aur<br/>Mark attendance dabayein.</p>
     <div class="qr-container">
       <img src="${qrDataUrl}" alt="qr" />
     </div>
@@ -156,7 +158,9 @@ export default function QRGeneratorPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Generate QR</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Create and manage QR tokens for member attendance.</p>
+          {!orgId && (
+            <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">Gym link load ho rahi hai. Print se pehle wait karo, warna QR is gym pe nahi khulega.</p>
+          )}
         </div>
         <Link href="/dashboard/attendance" className="inline-flex items-center gap-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-5 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 shadow-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-800">
           <ArrowLeft className="h-4 w-4" />
@@ -240,7 +244,7 @@ export default function QRGeneratorPage() {
                 </Button>
               </div>
               <div className="mt-5 w-full min-w-0 rounded-xl bg-slate-50 dark:bg-slate-800/30 p-4 border border-slate-100 dark:border-slate-800/50">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Target URL</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Member scan link</p>
                 <code className="block w-full text-sm text-slate-700 dark:text-slate-300 break-all">{getTargetUrl()}</code>
               </div>
             </div>
@@ -254,27 +258,27 @@ export default function QRGeneratorPage() {
             
             <div className="flex w-full min-w-0 items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30 p-2 sm:p-3">
               {qrDataUrl ? (
-                <div className="w-full max-w-[280px] mx-auto bg-black px-4 py-6 sm:px-5 sm:py-8 text-white shadow-2xl box-border">
-                  <h1 className="text-white text-2xl sm:text-3xl font-black text-center uppercase leading-tight break-words">
+                <div className="w-full max-w-[280px] mx-auto bg-white px-4 py-6 sm:px-5 sm:py-8 text-slate-900 shadow-xl box-border border border-slate-200">
+                  <h1 className="text-slate-900 text-2xl sm:text-3xl font-black text-center uppercase leading-tight break-words">
                     {gymName}
                   </h1>
-                  <h2 className="text-white text-base sm:text-xl font-bold text-center uppercase leading-tight mt-1 break-words">
+                  <h2 className="text-amber-600 text-base sm:text-xl font-bold text-center uppercase leading-tight mt-1 break-words">
                     Attendance Scanner
                   </h2>
                   
-                  <p className="text-gray-300 text-center text-xs sm:text-sm mt-4 leading-relaxed">
-                    Please scan this QR code using your phone or show it to the receptionist to mark your daily attendance.
+                  <p className="text-slate-600 text-center text-xs sm:text-sm mt-4 leading-relaxed">
+                    Phone Camera se QR scan karein. Mobile number daalein aur Mark attendance dabayein.
                   </p>
                   
                   <div className="mt-4 flex justify-center w-full">
                     <img
                       src={qrDataUrl}
                       alt="QR Preview"
-                      className="block w-[70%] max-w-[200px] aspect-square object-contain bg-white p-2"
+                      className="block w-[70%] max-w-[200px] aspect-square object-contain bg-white p-2 border border-slate-200"
                     />
                   </div>
 
-                  <div className="mt-5 text-center text-white text-[11px] sm:text-xs italic font-semibold uppercase tracking-wider space-y-1 break-words">
+                  <div className="mt-5 text-center text-slate-700 text-[11px] sm:text-xs font-semibold uppercase tracking-wider space-y-1 break-words">
                     <p>ID : {token}</p>
                     <p>LABEL : {label || 'N/A'}</p>
                   </div>
@@ -290,11 +294,11 @@ export default function QRGeneratorPage() {
             </div>
 
             <div className="mt-6 flex flex-wrap justify-center gap-3">
-              <Button variant="outline" onClick={downloadPng} disabled={!qrDataUrl} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50">
+              <Button variant="outline" onClick={downloadPng} disabled={!qrDataUrl || !orgId} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50">
                 <Download className="h-4 w-4" />
                 Download
               </Button>
-              <Button variant="outline" onClick={printPreview} disabled={!qrDataUrl} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50">
+              <Button variant="outline" onClick={printPreview} disabled={!qrDataUrl || !orgId} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50">
                 <Printer className="h-4 w-4" />
                 Print
               </Button>

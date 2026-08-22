@@ -3,7 +3,6 @@
 import { createClient } from '@/utils/supabase/server';
 import { createPrivilegedClient } from '@/utils/supabase/admin';
 import { resolveOrgId } from '@/utils/supabase/org';
-import { revalidatePath } from 'next/cache';
 import { sendMemberReminder, sendOwnerSummary } from '@/utils/whatsapp';
 import { sendMembershipExpiryEmail } from '@/utils/email';
 
@@ -89,44 +88,27 @@ export async function getFeePlans() {
 }
 
 export async function addFeePlan(formData: FormData) {
-  const supabase = await createClient();
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData?.user) return { error: 'Unauthorized' };
-
-  let orgId = null;
-  const { data: admin } = await supabase.from('admin_users').select('organization_id').eq('id', userData.user.id).single();
-  if (admin?.organization_id) {
-    orgId = admin.organization_id;
-  } else {
-    const { data: orgByEmail } = await supabase.from('organizations').select('id').eq('owner_email', userData.user.email).limit(1).single();
-    if (orgByEmail?.id) orgId = orgByEmail.id;
-    else {
-      const { data: anyOrg } = await supabase.from('organizations').select('id').limit(1);
-      if (anyOrg && anyOrg.length > 0) orgId = anyOrg[0].id;
-    }
-  }
-
-  if (!orgId) return { error: 'No organization found' };
+  const { user, orgId } = await requireOrg();
+  if (!user || !orgId) return { error: 'Unauthorized' };
 
   const name = String(formData.get('name'));
   const amount = Number(formData.get('amount'));
   const duration_months = Number(formData.get('duration_months'));
 
   const adminSupabase = await createPrivilegedClient();
-  const { error } = await adminSupabase.from('fee_plans').insert({
+  const { data, error } = await adminSupabase.from('fee_plans').insert({
     organization_id: orgId,
     name,
     amount,
     duration_months
-  });
+  }).select('*').single();
 
   if (error) {
     console.error('Error adding fee plan:', error);
     return { error: error.message };
   }
 
-  revalidatePath('/dashboard/fees');
-  return { success: true };
+  return { success: true, plan: data };
 }
 
 export async function getFeeDashboardStats() {
@@ -229,29 +211,12 @@ export async function addInvoice(formData: FormData) {
     }).catch((err) => console.error('fee due email failed:', err));
   }
 
-  revalidatePath('/dashboard/fees');
-  revalidatePath('/dashboard/fees/invoices');
   return { success: true };
 }
 
 export async function addPayment(formData: FormData) {
-  const supabase = await createClient();
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData?.user) return { error: 'Unauthorized' };
-
-  let orgId = null;
-  const { data: admin } = await supabase.from('admin_users').select('organization_id').eq('id', userData.user.id).single();
-  if (admin?.organization_id) orgId = admin.organization_id;
-  else {
-    const { data: orgByEmail } = await supabase.from('organizations').select('id').eq('owner_email', userData.user.email).limit(1).single();
-    if (orgByEmail?.id) orgId = orgByEmail.id;
-    else {
-      const { data: anyOrg } = await supabase.from('organizations').select('id').limit(1);
-      if (anyOrg && anyOrg.length > 0) orgId = anyOrg[0].id;
-    }
-  }
-
-  if (!orgId) return { error: 'No organization found' };
+  const { user, orgId } = await requireOrg();
+  if (!user || !orgId) return { error: 'Unauthorized' };
   const adminSupabase = await createPrivilegedClient();
 
   const member_id = String(formData.get('member_id'));
@@ -312,28 +277,11 @@ export async function addPayment(formData: FormData) {
     }
   }
 
-  revalidatePath('/dashboard/fees');
-  revalidatePath('/dashboard/fees/collections');
   return { success: true };
 }
 export async function updateFeePlan(id: string, formData: FormData) {
-  const supabase = await createClient();
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData?.user) return { error: 'Unauthorized' };
-
-  let orgId = null;
-  const { data: admin } = await supabase.from('admin_users').select('organization_id').eq('id', userData.user.id).single();
-  if (admin?.organization_id) orgId = admin.organization_id;
-  else {
-    const { data: orgByEmail } = await supabase.from('organizations').select('id').eq('owner_email', userData.user.email).limit(1).single();
-    if (orgByEmail?.id) orgId = orgByEmail.id;
-    else {
-      const { data: anyOrg } = await supabase.from('organizations').select('id').limit(1);
-      if (anyOrg && anyOrg.length > 0) orgId = anyOrg[0].id;
-    }
-  }
-
-  if (!orgId) return { error: 'No organization found' };
+  const { user, orgId } = await requireOrg();
+  if (!user || !orgId) return { error: 'Unauthorized' };
 
   const name = String(formData.get('name'));
   const amount = Number(formData.get('amount'));
@@ -351,28 +299,12 @@ export async function updateFeePlan(id: string, formData: FormData) {
     return { error: error.message };
   }
 
-  revalidatePath('/dashboard/fees/plans');
   return { success: true };
 }
 
 export async function deleteFeePlan(id: string) {
-  const supabase = await createClient();
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData?.user) return { error: 'Unauthorized' };
-
-  let orgId = null;
-  const { data: admin } = await supabase.from('admin_users').select('organization_id').eq('id', userData.user.id).single();
-  if (admin?.organization_id) orgId = admin.organization_id;
-  else {
-    const { data: orgByEmail } = await supabase.from('organizations').select('id').eq('owner_email', userData.user.email).limit(1).single();
-    if (orgByEmail?.id) orgId = orgByEmail.id;
-    else {
-      const { data: anyOrg } = await supabase.from('organizations').select('id').limit(1);
-      if (anyOrg && anyOrg.length > 0) orgId = anyOrg[0].id;
-    }
-  }
-
-  if (!orgId) return { error: 'No organization found' };
+  const { user, orgId } = await requireOrg();
+  if (!user || !orgId) return { error: 'Unauthorized' };
 
   const adminSupabase = await createPrivilegedClient();
   const { error } = await adminSupabase.from('fee_plans').delete().eq('id', id).eq('organization_id', orgId);
@@ -382,7 +314,6 @@ export async function deleteFeePlan(id: string) {
     return { error: error.message };
   }
 
-  revalidatePath('/dashboard/fees/plans');
   return { success: true };
 }
 
@@ -464,6 +395,5 @@ export async function triggerFeeReminders() {
     await sendOwnerSummary(org.owner_phone, org.name, sent, totalAmount);
   }
 
-  revalidatePath('/dashboard/fees/invoices');
   return { success: true, message: `Sent ${sent} fee reminder${sent === 1 ? '' : 's'}.` };
 }

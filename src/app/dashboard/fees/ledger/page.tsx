@@ -1,22 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { IndianRupee, Search, Calendar, User, CheckCircle, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import type { PendingPayment } from '@/utils/fee-store';
+import { useFees } from '@/hooks/useGymQueries';
 
 export default function LedgerPage() {
-  const [payments, setPayments] = useState<PendingPayment[]>([]);
-  const [members, setMembers] = useState<any[]>([]);
+  const { data: payments = [] } = useFees();
   const [search, setSearch] = useState('');
-
-  useEffect(() => {
-    let mounted = true;
-    import('@/app/actions/fees').then(async m => {
-      const payList = await m.getFees();
-      if (mounted) setPayments(payList as any);
-    });
-    return () => { mounted = false; };
-  }, []);
 
   const filteredPayments = payments.filter((p: any) => {
     const memberName = p.members?.name || '';

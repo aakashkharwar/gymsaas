@@ -8,6 +8,7 @@ import { AlertTriangle, ArrowLeft, CalendarDays, Check, CheckCheck, Clock3, Filt
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import CustomDropdown from '@/components/CustomDropdown';
+import { markAttendanceExit } from '@/app/actions/attendance';
 
 const CameraScanner = dynamic(() => import('@/components/CameraScanner'), { ssr: false });
 
@@ -29,6 +30,8 @@ type AttendanceRecord = {
   syncStatus?: SyncStatus;
   lastSyncedAt?: string;
   syncResult?: string;
+  checkInAt?: string;
+  checkOutAt?: string;
 };
 
 type LocalMember = {
@@ -52,29 +55,75 @@ type LocalToken = {
 
 const STORAGE_KEY = 'gymos-attendance-offline-records';
 
-const sampleRecords: AttendanceRecord[] = [];
-
-const today = new Date().toISOString().slice(0, 10);
-
-function getCurrentTime() {
-  return new Date().toTimeString().slice(0, 5);
+function normalizeScannedQr(raw: string) {
+  const val = String(raw || '').trim();
+  if (!val) return '';
+  try {
+    const url = new URL(val);
+    const qr = url.searchParams.get('qr');
+    if (qr) return qr.trim();
+  } catch {
+    // plain token / phone from office-printed cards
+  }
+  return val;
 }
 
-function calculateDuration(entry: string, exit: string) {
-  if (!entry) return '-';
-  if (!exit) return 'In Gym';
-  
-  const [eH, eM] = entry.split(':').map(Number);
-  const [xH, xM] = exit.split(':').map(Number);
-  
-  let diffMins = (xH * 60 + xM) - (eH * 60 + eM);
-  if (diffMins < 0) diffMins += 24 * 60;
-  
-  const h = Math.floor(diffMins / 60);
-  const m = diffMins % 60;
-  
+async function resolveMemberName(val: string) {
+  const mod = await import('@/utils/storage');
+  const tokens = (await mod.getQRTokens()) || [];
+  const members = (await mod.getMembers()) || [];
+
+  const token = tokens.find((t: LocalToken) => String(t.token ?? '') === val || String(t.id ?? '') === val);
+  if (token) {
+    if (token.memberId) {
+      const mm = members.find((m: LocalMember) => String(m.id ?? '') === String(token.memberId));
+      if (mm?.name || mm?.label) return String(mm.name || mm.label);
+    }
+    if (token.label || token.name) return String(token.label || token.name);
+  }
+
+  const member = members.find((m: LocalMember) =>
+    String(m.qrCode ?? '') === val ||
+    String(m.token ?? '') === val ||
+    String(m.username ?? '') === val ||
+    String(m.phone ?? '') === val
+  );
+  return member ? String(member.name || member.label || '') : '';
+}
+
+const sampleRecords: AttendanceRecord[] = [];
+
+const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+function getCurrentTime() {
+  return new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' });
+}
+
+function formatMinutes(totalMins: number) {
+  const mins = Math.max(0, totalMins);
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
   if (h === 0) return `${m}m`;
   return `${h}h ${m}m`;
+}
+
+function calculateDuration(entry: string, exit: string, checkInAt?: string, checkOutAt?: string, now = Date.now()) {
+  if (checkInAt) {
+    const start = new Date(checkInAt).getTime();
+    const end = checkOutAt ? new Date(checkOutAt).getTime() : now;
+    const label = formatMinutes(Math.round((end - start) / 60000));
+    return checkOutAt ? label : `${label} in gym`;
+  }
+  if (!entry) return '-';
+  if (!exit) return 'In Gym';
+
+  const [eH, eM] = entry.split(':').map(Number);
+  const [xH, xM] = exit.split(':').map(Number);
+
+  let diffMins = (xH * 60 + xM) - (eH * 60 + eM);
+  if (diffMins < 0) diffMins += 24 * 60;
+
+  return formatMinutes(diffMins);
 }
 
 function parseName(fullName: string) {
@@ -131,10 +180,16 @@ export default function AttendancePage() {
   const [showCamera, setShowCamera] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
-  const [kioskMode, setKioskMode] = useState(false);
+  const [kioskMode, setKioskMode] = useState(true);
   const [paused, setPaused] = useState(false);
   const [kioskSilent, setKioskSilent] = useState(false);
   const [scanToast, setScanToast] = useState<{ message: string; ts: number } | null>(null);
+  const [nowTick, setNowTick] = useState(Date.now());
+
+  useEffect(() => {
+    const tick = window.setInterval(() => setNowTick(Date.now()), 30000);
+    return () => window.clearInterval(tick);
+  }, []);
 
   const MAX_RECENT = 6;
 
@@ -225,13 +280,17 @@ export default function AttendancePage() {
                 firstName: pName.first,
                 middleName: pName.middle,
                 lastName: pName.last,
-                qrCode: '',
-                entryTime: d.toTimeString().slice(0, 5),
-                exitTime: '',
+                qrCode: s.members?.phone || '',
+                entryTime: d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' }),
+                exitTime: s.check_out_time
+                  ? new Date(s.check_out_time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })
+                  : '',
                 status: 'present' as AttendanceStatus,
-                date: d.toISOString().slice(0, 10),
+                date: d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
                 createdAt: s.check_in_time,
                 syncStatus: s.sync_status as SyncStatus,
+                checkInAt: s.check_in_time,
+                checkOutAt: s.check_out_time || '',
               };
             });
             
@@ -254,7 +313,11 @@ export default function AttendancePage() {
     }
     
     loadData();
-    return () => { mounted = false; };
+    const refresh = window.setInterval(loadData, 15000);
+    return () => {
+      mounted = false;
+      window.clearInterval(refresh);
+    };
   }, []);
 
   // If the page is opened with ?qr=... (for example when a mobile device scans the QR),
@@ -530,12 +593,32 @@ export default function AttendancePage() {
     toast.success('Attendance marked successfully');
   };
 
+  const handleMarkExit = async (record: AttendanceRecord) => {
+    const result = await markAttendanceExit(record.id);
+    if ('error' in result && result.error) {
+      toast.error(result.error);
+      return;
+    }
+    if (!('checkOutTime' in result) || !result.checkOutTime) {
+      toast.error('Could not mark exit');
+      return;
+    }
+    const exitTime = new Date(result.checkOutTime).toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Asia/Kolkata',
+    });
+    setRecords((prev) => prev.map((row) => (
+      row.id === record.id ? { ...row, exitTime, checkOutAt: result.checkOutTime } : row
+    )));
+    toast.success('Exit marked');
+  };
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">Attendance</h1>
-          <p className="mt-2 text-sm sm:text-lg text-slate-500 dark:text-slate-400">Offline-first member check-ins and daily attendance overview.</p>
         </div>
         {scanToast && (
           <div className="fixed right-6 top-6 z-50 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-lg">{scanToast.message}</div>
@@ -583,7 +666,7 @@ export default function AttendancePage() {
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">QR Scanner</h2>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Scan the member QR code to open the attendance form.</p>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Member apna card dikhaye. Office yahin se scan kare — Google Lens ki zaroorat nahi.</p>
               </div>
               <div className="rounded-full bg-slate-100 dark:bg-slate-800 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400">
                 Offline mode
@@ -596,48 +679,25 @@ export default function AttendancePage() {
                   <CameraScanner
                     externalStream={cameraStream}
                     mode={kioskMode ? 'continuous' : 'single'}
-                    onDetected={(val) => {
-                      // Find if an active session already exists for today
+                    onDetected={(raw) => {
+                      const val = normalizeScannedQr(raw);
                       const existingRecord = records.find(r => 
-                        (r.qrCode === String(val) || (r.firstName + ' ' + (r.lastName || '')).trim().toLowerCase() === String(val).toLowerCase()) 
+                        (r.qrCode === val || (r.firstName + ' ' + (r.lastName || '')).trim().toLowerCase() === val.toLowerCase()) 
                         && r.date === today
                       );
 
                       if (kioskMode) {
                         (async () => {
                           try {
-                            const mod = await import('@/utils/storage');
-                            const tokens = (await mod.getQRTokens()) || [];
-                            const members = (await mod.getMembers()) || [];
-
-                            let resolvedName = '';
-
-                            const token = tokens.find((t: LocalToken) => String(t.token ?? '') === String(val) || String(t.id ?? '') === String(val));
-                            if (token) {
-                              if (token.memberId) {
-                                const mm = members.find((m: LocalMember) => String(m.id ?? '') === String(token.memberId));
-                                if (mm) {
-                                  resolvedName = mm.name || mm.label || '';
-                                }
-                              }
-                              if (!resolvedName) resolvedName = token.label || token.name || '';
-                            }
-
-                            if (!resolvedName) {
-                              const mm2 = members.find((m: LocalMember) => String(m.qrCode ?? '') === String(val) || String(m.token ?? '') === String(val) || String(m.username ?? '') === String(val));
-                              if (mm2) {
-                                resolvedName = mm2.name || mm2.label || '';
-                              }
-                            }
-
-                            const memberNameFinal = resolvedName || String(val) || 'Unknown';
+                            const resolvedName = await resolveMemberName(val);
+                            const memberNameFinal = resolvedName || val || 'Unknown';
                             const parsedName = parseName(memberNameFinal);
 
                             const DUP_MS = 5000;
                             const now = Date.now();
 
                             setRecords((prev) => {
-                              const existing = prev.find(r => (r.qrCode === String(val) || r.firstName.toLowerCase() === parsedName.first.toLowerCase()) && r.date === today);
+                              const existing = prev.find(r => (r.qrCode === val || r.firstName.toLowerCase() === parsedName.first.toLowerCase()) && r.date === today);
                               
                               if (existing) {
                                 if (now - new Date(existing.createdAt).getTime() < DUP_MS) {
@@ -659,7 +719,7 @@ export default function AttendancePage() {
                                 firstName: parsedName.first,
                                 middleName: parsedName.middle,
                                 lastName: parsedName.last,
-                                qrCode: String(val),
+                                qrCode: val,
                                 entryTime: getCurrentTime(),
                                 exitTime: '',
                                 status: 'present',
@@ -672,19 +732,19 @@ export default function AttendancePage() {
                           } catch (e) {
                             console.error('kiosk resolution error', e);
                             setRecords((prev) => {
-                              const existing = prev.find(r => r.qrCode === String(val) && r.date === today);
+                              const existing = prev.find(r => r.qrCode === val && r.date === today);
                               if (existing) {
                                 showScanFeedback('Exit recorded');
                                 return prev.map(r => r.id === existing.id ? { ...r, exitTime: getCurrentTime(), syncStatus: 'pending', createdAt: new Date().toISOString() } : r);
                               }
                               showScanFeedback('Scan accepted');
-                              const fallbackParsed = parseName(String(val) || 'Unknown');
+                              const fallbackParsed = parseName(val || 'Unknown');
                               return [{
                                 id: crypto.randomUUID(),
                                 firstName: fallbackParsed.first,
                                 middleName: fallbackParsed.middle,
                                 lastName: fallbackParsed.last,
-                                qrCode: String(val),
+                                qrCode: val,
                                 entryTime: getCurrentTime(),
                                 exitTime: '',
                                 status: 'present',
@@ -696,34 +756,39 @@ export default function AttendancePage() {
                           }
                         })();
                       } else {
-                        if (existingRecord) {
-                          setFormData({
-                            id: existingRecord.id,
-                            firstName: existingRecord.firstName,
-                            middleName: existingRecord.middleName || '',
-                            lastName: existingRecord.lastName,
-                            qrCode: existingRecord.qrCode,
-                            entryTime: existingRecord.entryTime,
-                            exitTime: getCurrentTime(),
-                            status: existingRecord.status,
-                            date: existingRecord.date
-                          });
-                        } else {
-                          const fallbackParsed = parseName(String(val));
-                          setFormData({
-                            id: null,
-                            firstName: fallbackParsed.first,
-                            middleName: fallbackParsed.middle,
-                            lastName: fallbackParsed.last,
-                            qrCode: val,
-                            entryTime: getCurrentTime(),
-                            exitTime: '',
-                            status: 'present',
-                            date: today
-                          });
-                        }
-                        setMode('form');
-                        stopCamera();
+                        (async () => {
+                          const resolvedName = existingRecord
+                            ? ''
+                            : await resolveMemberName(val).catch(() => '');
+                          if (existingRecord) {
+                            setFormData({
+                              id: existingRecord.id,
+                              firstName: existingRecord.firstName,
+                              middleName: existingRecord.middleName || '',
+                              lastName: existingRecord.lastName,
+                              qrCode: existingRecord.qrCode,
+                              entryTime: existingRecord.entryTime,
+                              exitTime: getCurrentTime(),
+                              status: existingRecord.status,
+                              date: existingRecord.date
+                            });
+                          } else {
+                            const fallbackParsed = parseName(resolvedName || val);
+                            setFormData({
+                              id: null,
+                              firstName: fallbackParsed.first,
+                              middleName: fallbackParsed.middle,
+                              lastName: fallbackParsed.last,
+                              qrCode: val,
+                              entryTime: getCurrentTime(),
+                              exitTime: '',
+                              status: 'present',
+                              date: today
+                            });
+                          }
+                          setMode('form');
+                          stopCamera();
+                        })();
                       }
                     }}
                     onError={(err) => {
@@ -930,7 +995,9 @@ export default function AttendancePage() {
           <div className="w-full rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm transition-colors">
             <div className="rounded-t-[23px] border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/50 p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Attendance records</h3>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">Attendance records</h3>
+                </div>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                   <div className="relative h-fit">
                     <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
@@ -1005,8 +1072,20 @@ export default function AttendancePage() {
                         <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{record.qrCode}</td>
                         <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{record.date}</td>
                         <td className="px-6 py-4 text-slate-600 dark:text-slate-400 font-medium">{record.entryTime || '--:--'}</td>
-                        <td className="px-6 py-4 text-slate-600 dark:text-slate-400 font-medium">{record.exitTime || '--:--'}</td>
-                        <td className="px-6 py-4 text-slate-600 dark:text-slate-400 font-medium whitespace-nowrap">{calculateDuration(record.entryTime, record.exitTime)}</td>
+                        <td className="px-6 py-4 text-slate-600 dark:text-slate-400 font-medium">
+                          {record.exitTime ? record.exitTime : (
+                            <button
+                              type="button"
+                              onClick={() => handleMarkExit(record)}
+                              className="rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                            >
+                              Mark exit
+                            </button>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-slate-600 dark:text-slate-400 font-medium whitespace-nowrap">
+                          {calculateDuration(record.entryTime, record.exitTime, record.checkInAt, record.checkOutAt, nowTick)}
+                        </td>
                         <td className="px-6 py-4 flex items-center gap-3">
                           <span
                             className={`inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider ${

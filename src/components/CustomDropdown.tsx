@@ -15,6 +15,7 @@ type CustomDropdownProps = {
   className?: string;
   icon?: ReactNode;
   hasError?: boolean;
+  loading?: boolean;
 };
 
 export default function CustomDropdown({
@@ -25,6 +26,7 @@ export default function CustomDropdown({
   className = '',
   icon,
   hasError = false,
+  loading = false,
 }: CustomDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -57,7 +59,7 @@ export default function CustomDropdown({
         }`}
       >
         <span className="truncate">
-          {selectedOption ? selectedOption.label : placeholder}
+          {loading ? 'Loading...' : selectedOption ? selectedOption.label : placeholder}
         </span>
         <ChevronDown className={`h-4 w-4 text-slate-400 dark:text-slate-500 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>

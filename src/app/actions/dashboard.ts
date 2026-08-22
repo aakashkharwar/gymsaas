@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server';
+import { resolveOrgId } from '@/utils/supabase/org';
 import { unstable_rethrow } from 'next/navigation';
 
 export async function getGymName() {
@@ -54,6 +55,18 @@ export async function getGymName() {
     console.error("Error in getGymName:", err);
     return 'GYM NAME';
   }
+}
+
+export async function getCheckInContext() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { orgId: '', gymName: 'GYM NAME' };
+
+  const orgId = await resolveOrgId(supabase, user);
+  if (!orgId) return { orgId: '', gymName: 'GYM NAME' };
+
+  const { data: org } = await supabase.from('organizations').select('name').eq('id', orgId).maybeSingle();
+  return { orgId, gymName: org?.name || 'GYM NAME' };
 }
 
 export async function getDashboardStats() {

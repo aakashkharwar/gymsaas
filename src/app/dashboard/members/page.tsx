@@ -6,6 +6,7 @@ import {
   CalendarRange,
   CircleDashed,
   CreditCard,
+  IdCard,
   Mail,
   Phone,
   Plus,
@@ -19,6 +20,8 @@ import { addMember, getMembers, updateMember } from '@/app/actions/members';
 import { getFeePlans } from '@/app/actions/fees';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { useSave } from '@/components/SaveProvider';
+import { SavingButton } from '@/components/SavingButton';
 
 type MemberStatus = 'active' | 'inactive' | 'suspended';
 type PlanType = 'monthly' | 'quarterly' | 'annual';
@@ -59,11 +62,12 @@ const statusOptions: Array<{ value: MemberStatus; label: string; accent: string;
 
 export default function MembersPage() {
   const queryClient = useQueryClient();
+  const runSave = useSave();
   const { data: members = [] } = useQuery({
     queryKey: queryKeys.members,
     queryFn: () => getMembers() as Promise<Member[]>,
   });
-  const { data: feePlans = [] } = useQuery({
+  const { data: feePlans = [], isPending: plansLoading } = useQuery({
     queryKey: queryKeys.feePlans,
     queryFn: getFeePlans,
   });
@@ -159,6 +163,7 @@ export default function MembersPage() {
     }
 
     setIsSubmitting(true);
+    await runSave(async () => {
     try {
       const fd = new FormData();
       fd.append('name', formData.name.trim());
@@ -224,6 +229,7 @@ export default function MembersPage() {
     } finally {
       setIsSubmitting(false);
     }
+    });
   };
 
   const handleEditClick = (member: Member) => {
@@ -240,6 +246,19 @@ export default function MembersPage() {
     setEditingMemberId(member.id);
     setErrors({});
     setIsModalOpen(true);
+  };
+
+  const handlePrintIdCard = async (member: Member) => {
+    try {
+      const { printMemberIdCard } = await import('@/lib/print-member-id-card');
+      await printMemberIdCard({
+        ...member,
+        address: addressFromMember(member),
+      });
+    } catch (err) {
+      console.error(err);
+      toast.error('Could not generate ID card. Allow pop-ups and try again.');
+    }
   };
 
   const handleAddNewClick = () => {
@@ -346,15 +365,27 @@ export default function MembersPage() {
                     </span>
                   </div>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleEditClick(member)}
-                  className="w-full"
-                >
-                  Edit
-                </Button>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePrintIdCard(member)}
+                    className="w-full"
+                  >
+                    <IdCard className="mr-1.5 h-4 w-4" />
+                    ID Card
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEditClick(member)}
+                    className="w-full"
+                  >
+                    Edit
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
@@ -403,15 +434,27 @@ export default function MembersPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <Button 
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEditClick(member)}
-                        className="text-sm font-medium text-indigo-700 border-indigo-200 hover:bg-indigo-50 dark:text-indigo-300 dark:border-indigo-800 dark:hover:bg-indigo-950"
-                      >
-                        Edit
-                      </Button>
+                      <div className="inline-flex items-center justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePrintIdCard(member)}
+                          className="text-sm font-medium"
+                        >
+                          <IdCard className="mr-1.5 h-4 w-4" />
+                          ID Card
+                        </Button>
+                        <Button 
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditClick(member)}
+                          className="text-sm font-medium text-indigo-700 border-indigo-200 hover:bg-indigo-50 dark:text-indigo-300 dark:border-indigo-800 dark:hover:bg-indigo-950"
+                        >
+                          Edit
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -507,6 +550,7 @@ export default function MembersPage() {
                       label: `${plan.name} - ₹${plan.amount}`
                     }))}
                     placeholder={feePlans.length === 0 ? "No plans available. Add one first." : "Select a plan..."}
+                    loading={plansLoading}
                     icon={<CreditCard className="h-5 w-5" />}
                     hasError={!!errors.fee_plan_id}
                   />
@@ -577,15 +621,14 @@ export default function MembersPage() {
                 >
                   Cancel
                 </Button>
-                <Button
+                <SavingButton
                   type="submit"
-                  disabled={isSubmitting}
+                  saving={isSubmitting}
+                  savingLabel="Saving..."
                   className="w-full sm:w-auto rounded-xl px-6 py-2.5"
                 >
-                  {isSubmitting 
-                    ? 'Saving...' 
-                    : (editingMemberId ? 'Update member' : 'Save member')}
-                </Button>
+                  {editingMemberId ? 'Update member' : 'Save member'}
+                </SavingButton>
               </div>
             </form>
           </div>

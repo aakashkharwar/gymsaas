@@ -7,9 +7,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Plus } from 'lucide-react';
 import { addExpense } from '@/app/actions/expenses';
 import { queryKeys } from '@/lib/query-keys';
+import { useSave } from '@/components/SaveProvider';
+import { SavingButton } from '@/components/SavingButton';
 
 export default function LogExpenseModal() {
   const queryClient = useQueryClient();
+  const runSave = useSave();
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -17,7 +20,7 @@ export default function LogExpenseModal() {
     e.preventDefault();
     setIsSubmitting(true);
     const formData = new FormData(e.currentTarget);
-    const res = await addExpense(formData);
+    const res = await runSave(() => addExpense(formData));
     setIsSubmitting(false);
     
     if (res?.error) {
@@ -102,9 +105,9 @@ export default function LogExpenseModal() {
                 <Button variant="outline" type="button" onClick={() => setIsOpen(false)} className="w-full sm:w-auto">
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
-                  {isSubmitting ? 'Saving...' : 'Save Expense'}
-                </Button>
+                <SavingButton type="submit" saving={isSubmitting} className="w-full sm:w-auto">
+                  Save Expense
+                </SavingButton>
               </div>
             </form>
           </div>

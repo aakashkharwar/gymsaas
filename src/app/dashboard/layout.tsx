@@ -6,9 +6,11 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { Home, Users, CheckSquare, CreditCard, Receipt, Settings, Menu, X, Clipboard } from 'lucide-react';
-import { QueryProvider } from '@/components/QueryProvider';
 import { useQueryClient } from '@tanstack/react-query';
 import { prefetchDashboardRoute } from '@/lib/prefetch-dashboard';
+import { getMembers } from '@/app/actions/members';
+import { getFeePlans, getInvoices } from '@/app/actions/fees';
+import { queryKeys } from '@/lib/query-keys';
 import ThemeToggle from '../../components/ThemeToggle';
 
 const OwnerCopilot = dynamic(() => import('@/components/OwnerCopilot'), { ssr: false });
@@ -47,11 +49,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <QueryProvider>
-      <DashboardShell>{children}</DashboardShell>
-    </QueryProvider>
-  );
+  return <DashboardShell>{children}</DashboardShell>;
 }
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
@@ -61,6 +59,12 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
+
+  useEffect(() => {
+    queryClient.prefetchQuery({ queryKey: queryKeys.members, queryFn: getMembers });
+    queryClient.prefetchQuery({ queryKey: queryKeys.feePlans, queryFn: getFeePlans });
+    queryClient.prefetchQuery({ queryKey: queryKeys.invoices, queryFn: getInvoices });
+  }, [queryClient]);
 
   // Register offline cache so attendance scanner still works without network
   useEffect(() => {

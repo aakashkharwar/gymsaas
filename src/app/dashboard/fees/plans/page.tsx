@@ -3,13 +3,17 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 
 import { useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Plus, CreditCard, AlertTriangle, X, Pencil, Trash2 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { addFeePlan, deleteFeePlan, getFeePlans } from '@/app/actions/fees';
+import { addFeePlan, deleteFeePlan, getFeePlans, updateFeePlan } from '@/app/actions/fees';
+import { useSave } from '@/components/SaveProvider';
+import { SavingButton } from '@/components/SavingButton';
 import { queryKeys } from '@/lib/query-keys';
 
 export default function FeePlansPage() {
   const queryClient = useQueryClient();
+  const runSave = useSave();
   const { data: plans = [] } = useQuery({
     queryKey: queryKeys.feePlans,
     queryFn: getFeePlans,
@@ -62,18 +66,43 @@ export default function FeePlansPage() {
       return;
     }
 
-    setIsSubmitting(true);
-    const fd = new FormData();
-    fd.append('name', formData.name);
-    fd.append('amount', formData.amount);
-    fd.append('duration_months', formData.duration_months);
+    flushSync(() => setIsSubmitting(true));
+    await runSave(async () => {
+      const fd = new FormData();
+      fd.append('name', formData.name);
+      fd.append('amount', formData.amount);
+      fd.append('duration_months', formData.duration_months);
 
-    await addFeePlan(fd);
-    queryClient.invalidateQueries({ queryKey: queryKeys.feePlans });
-    
-    setIsSubmitting(false);
-    setIsModalOpen(false);
-    setFormData({ name: '', amount: '', duration_months: '1', description: '' });
+      const result = editPlanId
+        ? await updateFeePlan(editPlanId, fd)
+        : await addFeePlan(fd);
+
+      if (result && 'error' in result && result.error) {
+        toast.error(result.error);
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (editPlanId) {
+        queryClient.setQueryData(queryKeys.feePlans, (prev: any[] | undefined) =>
+          (prev || []).map((plan) => plan.id === editPlanId ? {
+            ...plan,
+            name: formData.name,
+            amount: Number(formData.amount),
+            duration_months: Number(formData.duration_months),
+          } : plan)
+        );
+      } else if (result && 'plan' in result && result.plan) {
+        queryClient.setQueryData(queryKeys.feePlans, (prev: any[] | undefined) => [result.plan, ...(prev || [])]);
+      }
+
+      queryClient.invalidateQueries({ queryKey: queryKeys.feePlans });
+      toast.success(editPlanId ? 'Plan updated' : 'Plan saved');
+      setIsSubmitting(false);
+      setIsModalOpen(false);
+      setEditPlanId(null);
+      setFormData({ name: '', amount: '', duration_months: '1', description: '' });
+    });
   };
 
   return (
@@ -190,9 +219,9 @@ export default function FeePlansPage() {
                 <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} className="w-full sm:w-auto">
                   Cancel
                 </Button>
-                <Button type="submit" className="w-full sm:w-auto">
+                <SavingButton type="submit" saving={isSubmitting} savingLabel="Saving plan..." className="w-full sm:w-auto">
                   Save Plan
-                </Button>
+                </SavingButton>
               </div>
             </form>
           </div>

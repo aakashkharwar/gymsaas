@@ -46,6 +46,13 @@ export async function updateSession(request: NextRequest) {
 
     if (!isServerAction && request.nextUrl.pathname.startsWith('/dashboard')) {
       if (!user) {
+        if (
+          request.nextUrl.pathname.startsWith('/dashboard/attendance') &&
+          request.nextUrl.searchParams.has('qr')
+        ) {
+          url.pathname = '/check-in'
+          return NextResponse.redirect(url)
+        }
         url.pathname = '/login'
         return NextResponse.redirect(url)
       }

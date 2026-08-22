@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server';
-import { revalidatePath } from 'next/cache';
 
 export async function updateOrganizationSettings(formData: FormData) {
   const subdomain = String(formData.get('subdomain') ?? '').trim().toLowerCase();
@@ -63,7 +62,6 @@ export async function updateOrganizationSettings(formData: FormData) {
     return { error: 'Failed to update settings. Please try again.' };
   }
 
-  revalidatePath('/onboarding');
   return { success: true };
 }
 

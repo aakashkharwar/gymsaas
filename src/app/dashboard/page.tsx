@@ -28,10 +28,7 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Overview</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">Bottom-right Copilot is free — try “Aaj kitne aaye?”</p>
-      </div>
+      <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Overview</h1>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">

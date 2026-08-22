@@ -76,6 +76,7 @@ CREATE TABLE attendance (
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     member_id       UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
     check_in_time   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    check_out_time  TIMESTAMPTZ,
     sync_status     VARCHAR(20) DEFAULT 'synced',
     marked_by       VARCHAR(20) DEFAULT 'qr',
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()

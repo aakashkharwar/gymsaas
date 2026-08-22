@@ -2,65 +2,57 @@
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Plus, Search, FileText, CheckCircle, AlertTriangle, ChevronDown, Download, ArrowLeft, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import CustomDropdown from '@/components/CustomDropdown';
-import type { Invoice, FeePlan } from '@/utils/fee-store';
+import type { Invoice } from '@/utils/fee-store';
+import { addInvoice, triggerFeeReminders } from '@/app/actions/fees';
+import { useFeePlans, useInvoices, useMembers, useOrganizationDetails } from '@/hooks/useGymQueries';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query-keys';
+import { useSave } from '@/components/SaveProvider';
+import { SavingButton } from '@/components/SavingButton';
 
 export default function InvoicesPage() {
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [members, setMembers] = useState<any[]>([]);
-  const [feePlans, setFeePlans] = useState<FeePlan[]>([]);
+  const queryClient = useQueryClient();
+  const runSave = useSave();
+  const { data: invoices = [] } = useInvoices();
+  const { data: members = [], isPending: membersLoading } = useMembers();
+  const { data: feePlans = [], isPending: plansLoading } = useFeePlans();
+  const { data: orgDetails = null } = useOrganizationDetails();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isTriggering, setIsTriggering] = useState(false);
-  const [orgDetails, setOrgDetails] = useState<{name: string, address: string} | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
   const [formData, setFormData] = useState({
     member_id: '',
     fee_plan_id: '',
     due_date: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
   });
     const [formErrors, setFormErrors] = useState<{ member_id?: string; fee_plan_id?: string; due_date?: string }>({});
-  
-  useEffect(() => {
-    let mounted = true;
-    Promise.all([
-      import('@/app/actions/fees').then(m => m.getInvoices()),
-      import('@/app/actions/members').then(m => m.getMembers()),
-      import('@/app/actions/fees').then(m => m.getFeePlans()),
-        import('@/app/actions/fees').then(m => m.getOrganizationDetails())
-    ]).then(([invList, memList, planList, org]) => {
-      if (mounted) {
-        setInvoices(invList);
-        setMembers(Array.isArray(memList) ? memList : []);
-        setFeePlans(planList);
-          setOrgDetails(org);
-      }
-    });
-    return () => { mounted = false; };
-  }, []);
 
   
   const handleTriggerReminders = async () => {
     setIsTriggering(true);
-    try {
-      const m = await import('@/app/actions/fees');
-      const data = await m.triggerFeeReminders();
-      if (data.success) {
-        toast.success(data.message || 'Reminders sent.');
-        m.getInvoices().then(setInvoices);
-      } else {
-        toast.error(data.error || 'Failed to send reminders');
+    await runSave(async () => {
+      try {
+        const data = await triggerFeeReminders();
+        if (data.success) {
+          toast.success(data.message || 'Reminders sent.');
+          queryClient.invalidateQueries({ queryKey: queryKeys.invoices });
+        } else {
+          toast.error(data.error || 'Failed to send reminders');
+        }
+      } catch (e: any) {
+        toast.error(e.message || 'Error sending reminders');
+      } finally {
+        setIsTriggering(false);
       }
-    } catch (e: any) {
-      toast.error(e.message || 'Error sending reminders');
-    } finally {
-      setIsTriggering(false);
-    }
+    });
   };
 
   const today = new Date().toISOString().split('T')[0];
@@ -77,30 +69,29 @@ export default function InvoicesPage() {
       return;
     }
 
-    const fd = new FormData();
-    fd.append('member_id', formData.member_id);
-    fd.append('fee_plan_id', formData.fee_plan_id);
-    fd.append('due_date', formData.due_date);
+    setIsCreating(true);
+    await runSave(async () => {
+      const fd = new FormData();
+      fd.append('member_id', formData.member_id);
+      fd.append('fee_plan_id', formData.fee_plan_id);
+      fd.append('due_date', formData.due_date);
 
-    const m = await import('@/app/actions/fees');
-    const res = await m.addInvoice(fd);
+      const res = await addInvoice(fd);
+      if (res.error) {
+        toast.error(res.error);
+        return;
+      }
 
-    if (res.error) {
-      toast.error(res.error);
-      return;
-    }
-
-    const current = await m.getInvoices();
-    setInvoices(current);
-    setIsModalOpen(false);
-    setFormData({
-      member_id: '',
-      fee_plan_id: '',
-      due_date: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
+      setIsModalOpen(false);
+      setFormData({
+        member_id: '',
+        fee_plan_id: '',
+        due_date: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
+      });
+      toast.success('Invoice generated successfully!');
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices });
     });
-    toast.success('Invoice generated successfully!');
-    setIsModalOpen(false);
-    m.getInvoices().then((data) => { setInvoices([...data]); });
+    setIsCreating(false);
   };
 
   const handleMemberSelect = (memberId: string) => {
@@ -530,6 +521,7 @@ export default function InvoicesPage() {
                   options={members.map(m => ({ value: m.id, label: `${m.name} (${m.phone})` }))}
                   placeholder="Choose a member..."
                   hasError={!!formErrors.member_id}
+                  loading={membersLoading}
                 />
                 {formErrors.member_id && <p className="mt-1 text-sm text-red-500">{formErrors.member_id}</p>}
               </div>
@@ -542,6 +534,7 @@ export default function InvoicesPage() {
                   options={feePlans.map(p => ({ value: p.id, label: `${p.name} (₹${p.amount})` }))}
                   placeholder="Choose a fee plan..."
                   hasError={!!formErrors.fee_plan_id}
+                  loading={plansLoading}
                 />
                 {formErrors.fee_plan_id && <p className="mt-1 text-sm text-red-500">{formErrors.fee_plan_id}</p>}
               </div>
@@ -559,7 +552,9 @@ export default function InvoicesPage() {
 
               <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} className="w-full sm:w-auto rounded-xl px-6 py-2.5 text-sm font-semibold">Cancel</Button>
-                <Button type="submit" className="w-full sm:w-auto rounded-xl px-6 py-2.5">Create Invoice</Button>
+                <SavingButton type="submit" saving={isCreating} savingLabel="Creating..." className="w-full sm:w-auto rounded-xl px-6 py-2.5">
+                  Create Invoice
+                </SavingButton>
               </div>
             </form>
             </div>

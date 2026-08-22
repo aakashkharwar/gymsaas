@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { login } from '@/app/actions/auth';
 import { Button } from '@/components/ui/button';
+import { SaveBusy } from '@/components/SaveProvider';
 import { Loader2 } from 'lucide-react';
 
 function normalizeMessage(value: unknown): string | null {
@@ -70,6 +71,7 @@ export default function LoginPage() {
 
   return (
     <div className="w-full text-slate-900 dark:text-white">
+      <SaveBusy active={isPending} />
       <div className="text-center mb-8">
         <h2 className="text-3xl font-extrabold tracking-tight">Welcome back</h2>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 font-medium">
